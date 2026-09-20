@@ -46,10 +46,15 @@ bug is a real vulnerability rather than an inconvenience.
 ## Run
 
 ```bash
-npm install
-npm start        # Node 26 runs TypeScript directly — no build step
-npm test
+bun install
+bun start        # Bun runs TypeScript directly — no build step
+bun test
+bun run typecheck
 ```
+
+**Bun, one lockfile, one pinned TypeScript** — BRAIN_DECISIONS 21, which covers this repo too.
+The vault `CLAUDE.md` toolchain rule names `miobots-ganglion` explicitly; this file said `npm`
+until now, which is the drift `DECISIONS_PENDING.md` predicted when decision 21 landed.
 
 ## Current state
 
