@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { GanglionMcpServer } from "../src/mcp/server.ts";
+import { createGanglionMcpServer } from "../src/mcp/bootstrap.ts";
 import { DefaultPermissionManager } from "../src/mcp/permissions.ts";
 import { DefaultToolRegistry } from "../src/mcp/registry.ts";
 import { InMemoryAuditLog, SecureFilesystem, filesystemTools } from "../src/mcp/filesystem.ts";
@@ -131,12 +132,63 @@ describe("Ganglion MCP server core", () => {
     await expect(filesystem.delete(join(approved, "existing.txt"), false, false)).rejects.toThrow(/approval/);
     await filesystem.createFile(join(approved, "new.txt"), "new");
     expect(await readFile(join(approved, "new.txt"), "utf8")).toBe("new");
+    await filesystem.createDirectory(join(approved, "folder"));
+    await filesystem.rename(join(approved, "new.txt"), join(approved, "renamed.txt"));
+    await filesystem.move(join(approved, "renamed.txt"), join(approved, "folder", "moved.txt"));
+    expect(await filesystem.inspect(join(approved, "folder", "moved.txt"))).toMatchObject({ isDirectory: false, sizeBytes: 3 });
+    await filesystem.delete(join(approved, "folder", "moved.txt"), false, true);
     expect(audit.entries().map((entry) => entry.operation)).toContain("create_file");
+    expect(audit.entries().map((entry) => entry.operation)).toEqual(expect.arrayContaining(["create_directory", "move", "delete"]));
   });
 
   it("registers the seven capability families without advertising unavailable handlers", () => {
     const families = new Set(filesystemTools({} as SecureFilesystem).map((tool) => tool.family));
     expect(families).toEqual(new Set(["filesystem"]));
     expect(["screen_capture", "open_application_or_url", "media_control", "system_status", "confined_process", "autostart", "filesystem"]).toHaveLength(7);
+  });
+
+  it("bootstraps the implemented system-status adapter through injected transport", async () => {
+    const [serverTransport, clientTransport] = pair();
+    const server = await createGanglionMcpServer(serverTransport);
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+    await Promise.all([server.start(), client.connect(clientTransport)]);
+    const listed = await client.listTools();
+    expect(listed.tools.map((tool) => tool.name)).toContain("system.get_status");
+    const result = await client.callTool({ name: "system.get_status", arguments: {} });
+    expect(result.isError).not.toBe(true);
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects invalid nested schemas and unexpected properties before handlers run", async () => {
+    const [serverTransport, clientTransport] = pair();
+    let calls = 0;
+    const server = new GanglionMcpServer(serverTransport, {
+      tools: [{
+        name: "test.rich_schema",
+        description: "Validate rich input",
+        inputSchema: {
+          type: "object",
+          required: ["mode", "items"],
+          additionalProperties: false,
+          properties: {
+            mode: { type: "string", enum: ["safe", "fast"] },
+            items: { type: "array", minItems: 1, items: { type: "object", required: ["count"], additionalProperties: false, properties: { count: { type: "number", minimum: 1 } } } },
+          },
+        },
+        permission: "read",
+        family: "system_status",
+        enabled: true,
+        handler: async () => { calls++; return { ok: true }; },
+      }],
+    });
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+    await Promise.all([server.start(), client.connect(clientTransport)]);
+    expect((await client.callTool({ name: "test.rich_schema", arguments: { mode: "safe", items: [{ count: 2 }], extra: true } })).isError).toBe(true);
+    expect((await client.callTool({ name: "test.rich_schema", arguments: { mode: "unsafe", items: [{ count: 2 }] } })).isError).toBe(true);
+    expect((await client.callTool({ name: "test.rich_schema", arguments: { mode: "safe", items: [] } })).isError).toBe(true);
+    expect(calls).toBe(0);
+    await client.close();
+    await server.close();
   });
 });

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { InjectedMcpTransport } from "./sdk-transport.ts";
 import { DefaultToolRegistry } from "./registry.ts";
 import { DefaultPermissionManager } from "./permissions.ts";
-import type { ApprovalProvider, CapabilityAdapter, GanglionTransport, RegisteredTool } from "./types.ts";
+import type { ApprovalProvider, CapabilityAdapter, GanglionTransport, RegisteredTool, ToolSchema } from "./types.ts";
 
 export interface GanglionMcpServerOptions {
   name?: string;
@@ -17,6 +17,7 @@ export class GanglionMcpServer {
   readonly server: McpServer;
   readonly registry: DefaultToolRegistry;
   private readonly transport: InjectedMcpTransport;
+  private readonly validators = new Map<string, z.ZodTypeAny>();
   private closed = false;
 
   constructor(transport: GanglionTransport, options: GanglionMcpServerOptions = {}) {
@@ -37,13 +38,22 @@ export class GanglionMcpServer {
   register(tool: RegisteredTool): void {
     this.registry.register(tool);
     if (!tool.enabled) return;
+    const validator = this.zodInputSchema(tool.inputSchema);
+    this.validators.set(tool.name, validator);
     this.server.registerTool(tool.name, {
       description: tool.description,
-      inputSchema: this.zodInputSchema(tool.inputSchema),
+      inputSchema: validator,
       _meta: tool.metadata,
     }, async (input: unknown, extra: { signal?: AbortSignal }) => {
       try {
-        const result = await this.registry.execute(tool.name, input, { signal: extra.signal });
+        const parsed = this.validators.get(tool.name)?.safeParse(input);
+        if (!parsed?.success) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: JSON.stringify({ code: "invalid_arguments", message: "Tool arguments are invalid" }) }],
+          };
+        }
+        const result = await this.registry.execute(tool.name, parsed.data, { signal: extra.signal });
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       } catch (error) {
         const detail = this.safeError(error);
@@ -66,16 +76,58 @@ export class GanglionMcpServer {
     await this.server.close();
   }
 
-  private zodInputSchema(schema: unknown): Record<string, z.ZodType> {
-    if (!schema || typeof schema !== "object" || Array.isArray(schema)) throw new Error("Tool schema must be an object");
-    const shape: Record<string, z.ZodType> = {};
-    for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
-      if (value === "string") shape[key] = z.string();
-      else if (value === "boolean") shape[key] = z.boolean();
-      else if (value === "number") shape[key] = z.number().finite();
-      else throw new Error(`Unsupported schema declaration for '${key}'`);
+  private zodInputSchema(schema: ToolSchema): z.ZodTypeAny {
+    if (typeof schema === "string") throw new Error("Tool schema must describe an object");
+    if (!("type" in schema)) {
+      const shape: Record<string, z.ZodType> = {};
+      for (const [key, property] of Object.entries(schema)) shape[key] = this.zodValue(property as ToolSchema);
+      return z.object(shape).strict();
     }
-    return shape;
+    if (schema.type !== "object") throw new Error("Tool input schema must be an object");
+    const shape: Record<string, z.ZodType> = {};
+    for (const [key, property] of Object.entries(schema.properties ?? {})) {
+      let value = this.zodValue(property);
+      if (!(schema.required ?? []).includes(key)) value = value.optional();
+      shape[key] = value;
+    }
+    return z.object(shape).strict();
+  }
+
+  private zodValue(schema: ToolSchema): z.ZodTypeAny {
+    if (typeof schema === "string") {
+      if (schema === "string") return z.string();
+      if (schema === "number") return z.number().finite();
+      if (schema === "boolean") return z.boolean();
+      throw new Error("Unsupported schema declaration");
+    }
+    let value: z.ZodTypeAny;
+    if (schema.type === "object") {
+      const shape: Record<string, z.ZodType> = {};
+      for (const [key, property] of Object.entries(schema.properties ?? {})) {
+        let nested = this.zodValue(property);
+        if (!(schema.required ?? []).includes(key)) nested = nested.optional();
+        shape[key] = nested;
+      }
+      value = schema.additionalProperties === false ? z.object(shape).strict() : z.object(shape);
+    } else if (schema.type === "array") {
+      let arrayValue = z.array(this.zodValue(schema.items));
+      if (schema.minItems !== undefined) arrayValue = arrayValue.min(schema.minItems);
+      if (schema.maxItems !== undefined) arrayValue = arrayValue.max(schema.maxItems);
+      value = arrayValue;
+    } else if (schema.type === "string") {
+      let stringValue: z.ZodTypeAny = schema.enum?.length ? z.enum(schema.enum as [string, ...string[]]) : z.string();
+      if (schema.minLength !== undefined) stringValue = (stringValue as z.ZodString).min(schema.minLength);
+      if (schema.maxLength !== undefined) stringValue = (stringValue as z.ZodString).max(schema.maxLength);
+      value = stringValue;
+    } else if (schema.type === "number") {
+      let numberValue: z.ZodTypeAny = z.number().finite();
+      if (schema.minimum !== undefined) numberValue = (numberValue as z.ZodNumber).min(schema.minimum);
+      if (schema.maximum !== undefined) numberValue = (numberValue as z.ZodNumber).max(schema.maximum);
+      value = numberValue;
+    } else {
+      value = z.boolean();
+    }
+    return value;
   }
 
   private safeError(error: unknown): { code: string; message: string } {

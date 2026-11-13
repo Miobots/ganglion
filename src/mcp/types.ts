@@ -14,10 +14,44 @@ export interface ToolContext {
   signal?: AbortSignal;
 }
 
+export type ToolSchema =
+  | string
+  | {
+      type: "object";
+      properties?: Record<string, ToolSchema>;
+      required?: string[];
+      additionalProperties?: boolean;
+      description?: string;
+    }
+  | {
+      type: "array";
+      items: ToolSchema;
+      minItems?: number;
+      maxItems?: number;
+      description?: string;
+    }
+  | {
+      type: "string";
+      enum?: string[];
+      minLength?: number;
+      maxLength?: number;
+      description?: string;
+    }
+  | {
+      type: "number";
+      minimum?: number;
+      maximum?: number;
+      description?: string;
+    }
+  | {
+      type: "boolean";
+      description?: string;
+    };
+
 export interface RegisteredTool<Input = unknown> {
   name: string;
   description: string;
-  inputSchema: unknown;
+  inputSchema: ToolSchema;
   permission: PermissionTier;
   family: CapabilityFamily;
   enabled: boolean;

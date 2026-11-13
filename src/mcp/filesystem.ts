@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { FilesystemAuditLog, FilesystemPolicy, RegisteredTool } from "./types.ts";
+import type { FilesystemAuditLog, FilesystemPolicy, RegisteredTool, ToolSchema } from "./types.ts";
 
 function isContained(root: string, target: string): boolean {
   const rel = relative(root, target);
@@ -105,6 +105,10 @@ export class SecureFilesystem {
     return { source: this.displayPath(from), destination: this.displayPath(to), moved: true };
   }
 
+  async rename(source: string, destination: string): Promise<unknown> {
+    return this.move(source, destination);
+  }
+
   async delete(path: string, recursive: boolean, confirmed: boolean): Promise<unknown> {
     const target = await this.target(path, true);
     const info = await stat(target.path);
@@ -128,12 +132,18 @@ async function exists(path: string): Promise<boolean> {
 
 export function filesystemTools(filesystem: SecureFilesystem): RegisteredTool[] {
   return [
-    { name: "filesystem.list_directory", description: "List approved directory contents.", inputSchema: { path: "string" }, permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.listDirectory((input as { path: string }).path) },
-    { name: "filesystem.read_file", description: "Read an approved text file.", inputSchema: { path: "string" }, permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.readFile((input as { path: string }).path) },
-    { name: "filesystem.inspect", description: "Inspect approved path metadata.", inputSchema: { path: "string" }, permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.inspect((input as { path: string }).path) },
-    { name: "filesystem.create_file", description: "Create a new file without overwriting.", inputSchema: { path: "string", content: "string" }, permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.createFile((input as { path: string; content: string }).path, (input as { content: string }).content) },
-    { name: "filesystem.create_directory", description: "Create a directory inside an approved directory.", inputSchema: { path: "string" }, permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.createDirectory((input as { path: string }).path) },
-    { name: "filesystem.move", description: "Move a file or directory without overwriting.", inputSchema: { source: "string", destination: "string" }, permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.move((input as { source: string; destination: string }).source, (input as { destination: string }).destination) },
-    { name: "filesystem.delete", description: "Delete an approved file or directory with explicit confirmation.", inputSchema: { path: "string", recursive: "boolean", confirmed: "boolean" }, permission: "action", family: "filesystem", enabled: true, handler: async (input) => { const value = input as { path: string; recursive?: boolean; confirmed?: boolean }; return filesystem.delete(value.path, value.recursive === true, value.confirmed === true); } },
+    { name: "filesystem.list_directory", description: "List approved directory contents.", inputSchema: objectSchema({ path: stringSchema() }), permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.listDirectory((input as { path: string }).path) },
+    { name: "filesystem.read_file", description: "Read an approved text file.", inputSchema: objectSchema({ path: stringSchema() }), permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.readFile((input as { path: string }).path) },
+    { name: "filesystem.get_metadata", description: "Inspect approved path metadata.", inputSchema: objectSchema({ path: stringSchema() }), permission: "read", family: "filesystem", enabled: true, handler: async (input) => filesystem.inspect((input as { path: string }).path) },
+    { name: "filesystem.create_file", description: "Create a new file without overwriting.", inputSchema: objectSchema({ path: stringSchema(), content: stringSchema() }), permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.createFile((input as { path: string; content: string }).path, (input as { content: string }).content) },
+    { name: "filesystem.create_directory", description: "Create a directory inside an approved directory.", inputSchema: objectSchema({ path: stringSchema() }), permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.createDirectory((input as { path: string }).path) },
+    { name: "filesystem.move", description: "Move a file or directory without overwriting.", inputSchema: objectSchema({ source: stringSchema(), destination: stringSchema() }), permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.move((input as { source: string; destination: string }).source, (input as { destination: string }).destination) },
+    { name: "filesystem.rename", description: "Rename a file or directory without overwriting.", inputSchema: objectSchema({ source: stringSchema(), destination: stringSchema() }), permission: "action", family: "filesystem", enabled: true, handler: async (input) => filesystem.rename((input as { source: string; destination: string }).source, (input as { destination: string }).destination) },
+    { name: "filesystem.delete", description: "Delete an approved file or directory with explicit confirmation.", inputSchema: objectSchema({ path: stringSchema(), recursive: { type: "boolean", description: "Delete directories recursively." }, confirmed: { type: "boolean", description: "Explicitly confirm the deletion." } }, ["path"]), permission: "action", family: "filesystem", enabled: true, handler: async (input) => { const value = input as { path: string; recursive?: boolean; confirmed?: boolean }; return filesystem.delete(value.path, value.recursive === true, value.confirmed === true); } },
   ];
+}
+
+function stringSchema(): ToolSchema { return { type: "string", minLength: 1 }; }
+function objectSchema(properties: Record<string, ToolSchema>, required = Object.keys(properties)): ToolSchema {
+  return { type: "object", properties, required, additionalProperties: false };
 }

@@ -56,9 +56,10 @@ until now, which is the drift `DECISIONS_PENDING.md` predicted when decision 21 
 
 ## Current state
 
-**Scaffold only, and this repo is deliberately last.** Building it before the four hero features
-are stable is the most likely way this project runs out of time — the internal proposal's own risk
-register names exactly that.
+Phase 3 contains a functional, transport-injected MCP server core. The official MCP SDK owns the
+MCP lifecycle; Ganglion owns registration, local permissions, approved-directory filesystem tools,
+and the system-status adapter. The Phase 2 Brain WebSocket adapter remains a separate integration
+dependency. Ganglion still does not open a listener or communicate directly with Heart or Synapse.
 
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.

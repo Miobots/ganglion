@@ -12,7 +12,8 @@ Bun, one lockfile, one pinned TypeScript — the same toolchain as `miobots-brai
 
 Design documentation is in the Obsidian vault two levels up.
 
-**Status: scaffold only, deliberately.** The system must work fully without this daemon, and it is built last — see `CLAUDE.md`.
+**Status: Phase 3 MCP server core.** The MCP server is functional and independently testable, but
+the Phase 2 Brain WebSocket transport adapter remains a separate integration dependency.
 
 Phase 3 exposes an independently testable MCP server core through an injected transport. It does
 not open a listener or implement the Brain WebSocket adapter. Only explicitly registered tools are
