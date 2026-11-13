@@ -8,7 +8,6 @@ in a failure path for another feature.
 problem space. A ganglion processes signals outside the central nervous system, which is exactly
 what a daemon on a separate machine does.
 
----
 
 ## Non-negotiable rules
 
@@ -41,7 +40,6 @@ bug is a real vulnerability rather than an inconvenience.
 
 **Arbitrary shell execution is not in scope and is not planned.**
 
----
 
 ## Run
 
@@ -71,10 +69,10 @@ Linux is built properly, with kernel-level confinement — Landlock for filesyst
 for syscall filtering, a separate low-privilege user, and no network by default. macOS and Windows
 get the separate-user baseline until there is time.
 
-**Six operations touch the OS** and sit behind a platform adapter: capture screen, open app or URL,
-media control, system status, launch a confined process, autostart. Everything else is
-platform-independent — which is what makes the other two platforms "implement two files" rather
-than a redesign.
+**Seven operations touch the OS** and sit behind a platform adapter: capture screen, open app or URL,
+media control, system status, launch a confined process, autostart, and approved-directory file
+management. Everything else is platform-independent — which is what makes the other two platforms
+"implement two files" rather than a redesign.
 
 **Screen capture on Wayland goes through `xdg-desktop-portal` and the compositor shows its own
 consent prompt.** Whether a persistent token survives across sessions is unverified and decides
@@ -82,7 +80,4 @@ whether this tool is usable as designed. Check that before building around it.
 
 ## Where the design lives
 
-- `../../03 Engineering/Components/Ganglion/GANGLION_SPEC.md` — what and why, including how this
   compares to OpenWork and OpenWorker
-- `../../03 Engineering/Components/Ganglion/GANGLION_DECISIONS.md` — **wins on conflict**
-- `../../03 Engineering/Components/Ganglion/GANGLION_TASKS.md`
