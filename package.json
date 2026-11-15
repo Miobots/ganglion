@@ -8,12 +8,14 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "bun run src/index.ts",
+    "start": "bun run src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@miobots/protocol": "file:../miobots-protocol",
     "@modelcontextprotocol/sdk": "1.32.2",
+    "dbus-next": "^0.10.2",
     "ws": "^8.18.0",
     "zod": "4.6.7"
   },

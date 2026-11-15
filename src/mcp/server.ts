@@ -43,7 +43,10 @@ export class GanglionMcpServer {
     this.server.registerTool(tool.name, {
       description: tool.description,
       inputSchema: validator,
-      _meta: tool.metadata,
+_meta: {
+  ...(tool.metadata ?? {}),
+  "miobots/permission": tool.permission,
+},
     }, async (input: unknown, extra: { signal?: AbortSignal }) => {
       try {
         const parsed = this.validators.get(tool.name)?.safeParse(input);
@@ -53,8 +56,50 @@ export class GanglionMcpServer {
             content: [{ type: "text" as const, text: JSON.stringify({ code: "invalid_arguments", message: "Tool arguments are invalid" }) }],
           };
         }
-        const result = await this.registry.execute(tool.name, parsed.data, { signal: extra.signal });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        const result = await this.registry.execute(
+  tool.name,
+  parsed.data,
+  { signal: extra.signal },
+);
+
+if (this.isImageResult(result)) {
+  // Base64 expands image data by approximately 4/3.
+  // Keep a conservative limit because Protocol envelopes
+  // have a 64 KB maximum message size.
+  const MAX_INLINE_IMAGE_BYTES = 350 * 1024;
+
+  if (result.sizeBytes > MAX_INLINE_IMAGE_BYTES) {
+    return {
+      isError: true,
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({
+          code: "image_too_large",
+          message:
+            "Screenshot exceeds the current inline image limit. " +
+            "Image resizing or artifact transfer is required.",
+          sizeBytes: result.sizeBytes,
+          maxBytes: MAX_INLINE_IMAGE_BYTES,
+        }),
+      }],
+    };
+  }
+
+  return {
+    content: [{
+      type: "image" as const,
+      data: result.data,
+      mimeType: result.mimeType,
+    }],
+  };
+}
+
+return {
+  content: [{
+    type: "text" as const,
+    text: JSON.stringify(result),
+  }],
+};
       } catch (error) {
         const detail = this.safeError(error);
         return {
@@ -129,6 +174,29 @@ export class GanglionMcpServer {
     }
     return value;
   }
+  private isImageResult(
+  result: unknown,
+): result is {
+  type: "image";
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  data: string;
+  sizeBytes: number;
+} {
+  if (typeof result !== "object" || result === null) {
+    return false;
+  }
+
+  const value = result as Record<string, unknown>;
+
+  return (
+    value.type === "image" &&
+    ["image/png", "image/jpeg", "image/webp"].includes(
+      value.mimeType as string,
+    ) &&
+    typeof value.data === "string" &&
+    typeof value.sizeBytes === "number"
+  );
+}
 
   private safeError(error: unknown): { code: string; message: string } {
     if (error instanceof Error && error.message.length < 256) {
