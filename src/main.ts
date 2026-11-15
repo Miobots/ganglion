@@ -1,10 +1,13 @@
 
 import { createGanglionMcpServer } from "./mcp/bootstrap.ts";
 import { BrainWebSocketTransport } from "./mcp/brain-websocket-transport.ts";
+import { parseFilesystemPolicy } from "./mcp/filesystem/policy.ts";
 
 const brainUrl = process.env.BRAIN_WS_URL ?? "ws://127.0.0.1:8080/ws";
 const deviceId = process.env.GANGLION_DEVICE_ID;
 const token = process.env.DEV_TOKEN;
+const filesystem = parseFilesystemPolicy(process.env.GANGLION_FILESYSTEM_POLICY);
+const allowFilesystemActions = process.env.MCP_DEV_ALLOW_FILESYSTEM_ACTIONS === "true";
 
 if (!deviceId) {
   throw new Error("GANGLION_DEVICE_ID is required");
@@ -20,7 +23,20 @@ const transport = new BrainWebSocketTransport({
   token,
 });
 
-const mcpServer = await createGanglionMcpServer(transport);
+const mcpServer = await createGanglionMcpServer(transport, {
+  ...(filesystem ? { filesystem } : {}),
+  ...(allowFilesystemActions ? {
+    approvalProvider: {
+      isTrusted: () => true,
+      isVoiceApproval: () => false,
+      requestApproval: async (request) => {
+        const allowed = request.toolName.startsWith("filesystem.");
+        if (allowed) console.info(`[Ganglion] MCP DEV filesystem action enabled tool=${request.toolName} target=${request.target ?? "unknown"}`);
+        return allowed;
+      },
+    },
+  } : {}),
+});
 
 await mcpServer.start();
 

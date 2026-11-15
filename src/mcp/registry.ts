@@ -21,10 +21,12 @@ export class DefaultToolRegistry implements ToolRegistry {
   async execute(name: string, input: unknown, context: ToolContext = {}): Promise<unknown> {
     const tool = this.tools.get(name);
     if (!tool) throw new McpToolError("unknown_tool", "Unknown tool");
+    const approvalDetails = await tool.approvalRequest?.(input);
     const decision = await this.permissions.authorize(tool, {
       toolName: name,
       tier: "action",
-      reason: `MCP requested ${name}`,
+      target: approvalDetails?.target,
+      reason: approvalDetails?.reason ?? `MCP requested ${name}`,
     }, context);
     if (!decision.allowed) throw new McpToolError(decision.code, decision.message);
     return tool.handler(input, context);

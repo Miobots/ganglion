@@ -56,6 +56,7 @@ export interface RegisteredTool<Input = unknown> {
   family: CapabilityFamily;
   enabled: boolean;
   metadata?: Record<string, unknown>;
+  approvalRequest?: (input: unknown) => Promise<{ target?: string; reason?: string }>;
   handler: (input: Input, context: ToolContext) => Promise<unknown>;
 }
 
@@ -115,6 +116,17 @@ export interface ApprovedDirectory {
 
 export interface FilesystemPolicy {
   approvedDirectories: ApprovedDirectory[];
+  limits?: Partial<FilesystemLimits>;
+}
+
+export interface FilesystemLimits {
+  maxReadBytes: number;
+  maxWriteBytes: number;
+  maxSearchBytes: number;
+  maxSearchResults: number;
+  maxSearchDepth: number;
+  maxDirectoryEntries: number;
+  maxSearchEntries: number;
 }
 
 export interface AuditEntry {

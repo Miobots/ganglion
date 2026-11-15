@@ -1,5 +1,5 @@
 import { cpus, freemem, hostname, platform, release, totalmem, uptime } from "node:os";
-import type { CapabilityAdapter, RegisteredTool, ToolSchema } from "./types.ts";
+import type { CapabilityAdapter, RegisteredTool, ToolSchema } from "../types.ts";
 
 const inputSchema: ToolSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
 
