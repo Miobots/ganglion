@@ -18,7 +18,7 @@ describe("Ganglion development process-action approval", () => {
 
   it("approves only process.terminate when opted in", async () => {
     const off = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: false });
-    const on = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true });
+    const on = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true }, "development");
     const processStart = approvalRequest("process.start");
     const processTerminate = approvalRequest("process.terminate");
     const filesystemAction = approvalRequest("filesystem.write_file");
@@ -34,8 +34,8 @@ describe("Ganglion development process-action approval", () => {
 
   it("preserves existing filesystem behavior without widening other actions", async () => {
     const off = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: false });
-    const fsEnabled = createGanglionDevApprovalProvider({ allowFilesystemActions: true, allowProcessActions: false });
-    const processEnabled = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true });
+    const fsEnabled = createGanglionDevApprovalProvider({ allowFilesystemActions: true, allowProcessActions: false }, "development");
+    const processEnabled = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true }, "development");
 
     expect(await off.requestApproval(approvalRequest("filesystem.write_file"))).toBe(false);
     expect(await fsEnabled.requestApproval(approvalRequest("filesystem.write_file"))).toBe(true);
@@ -44,7 +44,7 @@ describe("Ganglion development process-action approval", () => {
   });
 
   it("does not bypass ProcessManager protected-PID or identity checks", async () => {
-    const approval = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true });
+    const approval = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true }, "development");
     const protectedManager = createManager(1, 10);
     const protectedTool = managerTerminationTool(protectedManager);
     const protectedRegistry = new DefaultToolRegistry(new DefaultPermissionManager(approval));
@@ -62,6 +62,11 @@ describe("Ganglion development process-action approval", () => {
       status: "identity_mismatch",
       signalSent: false,
     });
+  });
+
+  it("refuses filesystem action auto-approval outside development", () => {
+    expect(() => createGanglionDevApprovalProvider({ allowFilesystemActions: true, allowProcessActions: false }, "production"))
+      .toThrow(/NODE_ENV=development/);
   });
 });
 

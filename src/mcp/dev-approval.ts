@@ -17,7 +17,10 @@ export function parseGanglionDevAutoApproveProcessActions(
 export function createGanglionDevApprovalProvider(options: {
   allowFilesystemActions: boolean;
   allowProcessActions: boolean;
-}): ApprovalProvider {
+}, nodeEnv = process.env.NODE_ENV): ApprovalProvider {
+  if ((options.allowFilesystemActions || options.allowProcessActions) && nodeEnv !== "development") {
+    throw new Error("Development action auto-approval requires NODE_ENV=development");
+  }
   return {
     isTrusted: () => true,
     isVoiceApproval: () => false,

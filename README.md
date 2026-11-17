@@ -38,7 +38,8 @@ file operations still require a filename, and move/copy require both source and 
 Filesystem reads remain available with this policy alone. To enable filesystem write, move, copy,
 directory creation, and deletion in the local MCP DEV flow, set
 `MCP_DEV_ALLOW_FILESYSTEM_ACTIONS=true` in both the Brain and Ganglion environments and restart
-both processes. It is disabled by default. Deletion additionally requires `confirmed: true`; recursive
+both processes with `NODE_ENV=development`. It is disabled by default and rejected outside development.
+Deletion additionally requires `confirmed: true`; recursive
 deletion requires both `recursive: true` and `confirmed: true`.
 
 ## Process Management
