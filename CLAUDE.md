@@ -78,6 +78,10 @@ read-tier tools only until `G2.3` brings an approval surface.
 approved folders. **No tool may ever write either file**; that is what keeps the folder list out
 of the agent's reach.
 
+**An Action-tier tool runs only against Brain's approval ticket** (GANGLION_DECISIONS 30): the
+tool, a SHA-256 of the exact arguments as received, unexpired, and used once. An invalid ticket is
+refused, never passed on to another approver.
+
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.
 
