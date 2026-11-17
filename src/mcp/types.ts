@@ -144,4 +144,6 @@ export interface CapabilityAdapter {
   family: CapabilityFamily;
   isAvailable(): boolean;
   tools(): RegisteredTool[];
+  start?(): Promise<void>;
+  stop?(): Promise<void>;
 }

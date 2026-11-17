@@ -11,6 +11,12 @@ export * from "./mcp/adapters/system-status.ts";
 export * from "./mcp/bootstrap.ts";
 export * from "./mcp/portal.ts";
 export * from "./mcp/adapters/screen-capture.ts";
+export * from "./mcp/process/types.ts";
+export * from "./mcp/process/policy.ts";
+export * from "./mcp/process/process-inspector.ts";
+export * from "./mcp/process/process-cpu-sampler.ts";
+export * from "./mcp/process/process-manager.ts";
+export * from "./mcp/adapters/process.ts";
 
 /** Phase 2 transport integration supplies the injected transport at runtime. */
 export function assertTransportConfigured(transport: unknown): asserts transport {

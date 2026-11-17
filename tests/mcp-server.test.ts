@@ -372,6 +372,78 @@ describe("Ganglion MCP server core", () => {
     await server.close();
   });
 
+  it("keeps process tools disabled by default and registers them only with explicit Linux configuration", async () => {
+    const [defaultServerTransport, defaultClientTransport] = pair();
+    const defaultServer = await createGanglionMcpServer(defaultServerTransport);
+    const defaultClient = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+    await Promise.all([defaultServer.start(), defaultClient.connect(defaultClientTransport)]);
+    const defaultNames = (await defaultClient.listTools()).tools.map((tool) => tool.name);
+    expect(defaultNames.filter((name) => name.startsWith("process."))).toEqual([]);
+    expect(defaultNames).toContain("system.get_status");
+    await defaultClient.close();
+    await defaultServer.close();
+
+    if (process.platform !== "linux") return;
+    const [enabledServerTransport, enabledClientTransport] = pair();
+    const enabledServer = await createGanglionMcpServer(enabledServerTransport, {
+      processManagement: { enabled: true, clockTicksPerSecond: 100, sampleIntervalMs: 60_000, protectedPids: [] },
+    });
+    const enabledClient = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+    await Promise.all([enabledServer.start(), enabledClient.connect(enabledClientTransport)]);
+    const enabledNames = (await enabledClient.listTools()).tools.map((tool) => tool.name);
+    expect(enabledNames.filter((name) => name.startsWith("process.")).sort()).toEqual([
+      "process.find",
+      "process.get_info",
+      "process.list",
+      "process.start",
+      "process.terminate",
+    ]);
+    await enabledClient.close();
+    await enabledServer.close();
+  });
+
+  it("starts available adapter lifecycles once and stops them when the MCP server closes", async () => {
+    const [serverTransport, clientTransport] = pair();
+    let starts = 0;
+    let stops = 0;
+    const server = new GanglionMcpServer(serverTransport, {
+      adapters: [{
+        family: "system_status",
+        isAvailable: () => true,
+        tools: () => [],
+        start: async () => { starts++; },
+        stop: async () => { stops++; },
+      }],
+    });
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+
+    await Promise.all([server.start(), client.connect(clientTransport)]);
+    await server.start();
+    expect(starts).toBe(1);
+    await client.close();
+    await server.close();
+    expect(stops).toBe(1);
+  });
+
+  it("closes the MCP transport even if an adapter stop hook fails", async () => {
+    const [serverTransport, clientTransport] = pair();
+    const server = new GanglionMcpServer(serverTransport, {
+      adapters: [{
+        family: "system_status",
+        isAvailable: () => true,
+        tools: () => [],
+        start: async () => {},
+        stop: async () => { throw new Error("sampler stop failed"); },
+      }],
+    });
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+    await Promise.all([server.start(), client.connect(clientTransport)]);
+
+    await expect(server.close()).rejects.toThrow(/sampler stop failed/);
+    expect(serverTransport.closed).toBe(true);
+    await client.close();
+  });
+
   it("rejects invalid nested schemas and unexpected properties before handlers run", async () => {
     const [serverTransport, clientTransport] = pair();
     let calls = 0;

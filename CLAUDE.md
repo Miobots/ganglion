@@ -34,11 +34,18 @@ action, recognition has become authorization.
 **Auto mode is scoped per-tool or per-directory, never global.** A blanket approve-everything
 toggle reduces the rest of the permission model to decoration.
 
+The temporary `GANGLION_DEV_AUTO_APPROVE_PROCESS_ACTIONS=true` exception is isolated local testing
+only, requires `NODE_ENV=development`, and authorizes only the two process action names. It does not
+remove ProcessManager policy, protected PID, or identity checks and must never be enabled in
+production.
 **Resolve symlinks first, then check the path is inside an approved folder.** Checking before
 resolution is the classic escape and a one-line mistake. This is the one place in this repo where a
 bug is a real vulnerability rather than an inconvenience.
 
-**Arbitrary shell execution is not in scope and is not planned.**
+**Arbitrary shell execution is not in scope and is not planned.** Process launching is a separate,
+explicitly enabled Linux capability: it accepts an executable and argument array with `shell: false`,
+but it is arbitrary execution and is not an OS sandbox. It always requires the existing trusted,
+non-voice action approval; development auto-approval must remain scoped to its existing tools.
 
 
 ## Run
@@ -70,10 +77,17 @@ Linux is built properly, with kernel-level confinement — Landlock for filesyst
 for syscall filtering, a separate low-privilege user, and no network by default. macOS and Windows
 get the separate-user baseline until there is time.
 
-**Seven operations touch the OS** and sit behind a platform adapter: capture screen, open app or URL,
-media control, system status, launch a confined process, autostart, and approved-directory file
-management. Everything else is platform-independent — which is what makes the other two platforms
-"implement two files" rather than a redesign.
+OS operations sit behind platform adapters. Process management is currently Linux-only and explicitly
+opt-in. Its five tools list, inspect, find, start, and terminate processes. Discovery returns all
+matches; the agent must present them and obtain a specific user selection before terminating with
+both PID and `startTimeTicks`. PID 1, Ganglion, its ancestors, and configured protected PIDs cannot
+be terminated. The final `/proc` identity check still has a small race before signaling; pidfd support
+is not implemented. Process actions remain subject to the Ganglion OS user's permissions.
+
+CPU sampling uses configured `clockTicksPerSecond` and a background interval; no universal tick rate
+is assumed. CPU percentage is per-core and may exceed 100%. Memory is reported in bytes, with RSS
+separate from virtual memory. The `confined_process` capability name does not provide kernel or OS
+confinement.
 
 **Screen capture on Wayland goes through `xdg-desktop-portal` and the compositor shows its own
 consent prompt.** Whether a persistent token survives across sessions is unverified and decides

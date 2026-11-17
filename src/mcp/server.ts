@@ -18,6 +18,9 @@ export class GanglionMcpServer {
   readonly registry: DefaultToolRegistry;
   private readonly transport: InjectedMcpTransport;
   private readonly validators = new Map<string, z.ZodTypeAny>();
+  private readonly lifecycleAdapters: CapabilityAdapter[] = [];
+  private readonly startedAdapters: CapabilityAdapter[] = [];
+  private started = false;
   private closed = false;
 
   constructor(transport: GanglionTransport, options: GanglionMcpServerOptions = {}) {
@@ -30,7 +33,9 @@ export class GanglionMcpServer {
     this.registry = new DefaultToolRegistry(new DefaultPermissionManager(options.approvalProvider));
     for (const tool of options.tools ?? []) this.register(tool);
     for (const adapter of options.adapters ?? []) {
-      if (adapter.isAvailable()) for (const tool of adapter.tools()) this.register(tool);
+      if (!adapter.isAvailable()) continue;
+      this.lifecycleAdapters.push(adapter);
+      for (const tool of adapter.tools()) this.register(tool);
     }
     this.transport = new InjectedMcpTransport(transport);
   }
@@ -112,13 +117,44 @@ return {
 
   async start(): Promise<void> {
     if (this.closed) throw new Error("Ganglion MCP server is closed");
+    if (this.started) return;
     await this.server.connect(this.transport);
+    try {
+      for (const adapter of this.lifecycleAdapters) {
+        await adapter.start?.();
+        this.startedAdapters.push(adapter);
+      }
+      this.started = true;
+    } catch (error) {
+      try {
+        await this.stopAdapters();
+      } catch {
+        // Preserve the startup failure while still closing the MCP server.
+      }
+      this.closed = true;
+      await this.server.close();
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    let adapterError: unknown;
+    try {
+      await this.stopAdapters();
+    } catch (error) {
+      adapterError = error;
+    }
     await this.server.close();
+    if (adapterError !== undefined) throw adapterError;
+  }
+
+  private async stopAdapters(): Promise<void> {
+    const adapters = this.startedAdapters.splice(0).reverse();
+    const outcomes = await Promise.allSettled(adapters.map((adapter) => adapter.stop?.()));
+    const failure = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+    if (failure) throw failure.reason;
   }
 
   private zodInputSchema(schema: ToolSchema): z.ZodTypeAny {
