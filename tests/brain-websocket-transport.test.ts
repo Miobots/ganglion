@@ -53,3 +53,29 @@ describe("BrainWebSocketTransport", () => {
     expect(internals.closedManually).toBe(true);
   });
 });
+
+describe("BrainWebSocketTransport when Brain refuses it", () => {
+  it("keeps running and schedules a retry instead of rejecting start()", async () => {
+    const { WebSocketServer } = await import("ws");
+    const { createWelcomeAck, encode: enc, parse: parseEnvelope } = await import("@miobots/protocol");
+    const server = new WebSocketServer({ port: 0 });
+    const port = (server.address() as { port: number }).port;
+    server.on("connection", (socket) => {
+      socket.on("message", (data) => {
+        const hello = parseEnvelope(data.toString());
+        if (!hello.success) return;
+        socket.send(enc(createWelcomeAck(hello.data, { accepted: false, seq: 1, reason: "Ganglion device is not allowlisted" })));
+        socket.close();
+      });
+    });
+
+    const transport = new BrainWebSocketTransport({ url: `ws://127.0.0.1:${port}`, deviceId: "ganglion-test", token: "test" });
+    await transport.start();
+    const internals = transport as unknown as { reconnectTimer?: ReturnType<typeof setTimeout> };
+    for (let i = 0; i < 50 && !internals.reconnectTimer; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(internals.reconnectTimer).toBeDefined();
+
+    await transport.close();
+    server.close();
+  });
+});
