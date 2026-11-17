@@ -3,6 +3,7 @@ import { createGanglionMcpServer } from "./mcp/bootstrap.ts";
 import { BrainWebSocketTransport } from "./mcp/brain-websocket-transport.ts";
 import { parseFilesystemPolicy } from "./mcp/filesystem/policy.ts";
 import { parseProcessManagementConfiguration } from "./mcp/process/policy.ts";
+import { parseAppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
 import { createGanglionDevApprovalProvider, parseGanglionDevAutoApproveProcessActions } from "./mcp/dev-approval.ts";
 
 const brainUrl = process.env.BRAIN_WS_URL ?? "ws://127.0.0.1:8080/ws";
@@ -10,6 +11,7 @@ const deviceId = process.env.GANGLION_DEVICE_ID;
 const token = process.env.DEV_TOKEN;
 const filesystem = parseFilesystemPolicy(process.env.GANGLION_FILESYSTEM_POLICY);
 const processManagement = parseProcessManagementConfiguration(process.env.GANGLION_PROCESS_MANAGEMENT);
+const appLauncher = parseAppLauncherPolicy(process.env.GANGLION_APP_ALLOWLIST);
 const allowFilesystemActions = process.env.MCP_DEV_ALLOW_FILESYSTEM_ACTIONS === "true";
 const allowProcessActions = parseGanglionDevAutoApproveProcessActions();
 
@@ -30,6 +32,7 @@ const transport = new BrainWebSocketTransport({
 const mcpServer = await createGanglionMcpServer(transport, {
   ...(filesystem ? { filesystem } : {}),
   ...(processManagement ? { processManagement } : {}),
+  ...(appLauncher ? { appLauncher } : {}),
   ...(allowFilesystemActions || allowProcessActions ? {
     approvalProvider: createGanglionDevApprovalProvider({ allowFilesystemActions, allowProcessActions }),
   } : {}),

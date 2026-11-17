@@ -17,10 +17,11 @@ import {
 } from "@miobots/protocol";
 import type { GanglionTransport } from "./types.ts";
 
-interface BrainTransportOptions {
+export interface BrainTransportOptions {
   url: string;
   deviceId: string;
   token: string;
+  autoReconnect?: boolean;
 }
 
 type StartupCallbacks = {
@@ -40,6 +41,9 @@ export class BrainWebSocketTransport implements GanglionTransport {
   private helloCorrelation?: string;
   private startup?: StartupCallbacks;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private currentBackoffMs: number = ProtocolDefaults.RECONNECT_INITIAL_DELAY_MS;
+  private closedManually = false;
   private started = false;
 
   constructor(options: BrainTransportOptions) {
@@ -48,15 +52,25 @@ export class BrainWebSocketTransport implements GanglionTransport {
 
   async start(): Promise<void> {
     if (this.started) return;
+    this.closedManually = false;
+    await this.connect();
+  }
+
+  private connect(): Promise<void> {
+    if (this.closedManually) return Promise.resolve();
 
     const socket = new WebSocket(this.options.url);
     this.socket = socket;
 
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       this.startup = { resolve, reject };
 
       const timeout = setTimeout(() => {
-        reject(new Error("Timed out waiting for Brain authentication"));
+        const error = new Error("Timed out waiting for Brain authentication");
+        if (this.startup) {
+          this.startup.reject(error);
+          this.startup = undefined;
+        }
         socket.close();
       }, 10_000);
 
@@ -104,10 +118,21 @@ export class BrainWebSocketTransport implements GanglionTransport {
       });
 
       socket.on("close", () => {
+        clearTimeout(timeout);
         this.stopHeartbeat();
+        this.pendingCorrelations.clear();
         this.started = false;
         this.onclose?.();
         console.log("[Ganglion] Brain connection closed");
+
+        if (this.startup) {
+          this.startup.reject(new Error("Connection closed before authentication"));
+          this.startup = undefined;
+        }
+
+        if (!this.closedManually && (this.options.autoReconnect ?? true)) {
+          this.scheduleReconnect();
+        }
       });
 
       const originalResolve = resolve;
@@ -194,6 +219,8 @@ export class BrainWebSocketTransport implements GanglionTransport {
   }
 
   async close(): Promise<void> {
+    this.closedManually = true;
+    this.stopReconnect();
     this.stopHeartbeat();
     this.pendingCorrelations.clear();
 
@@ -230,6 +257,7 @@ export class BrainWebSocketTransport implements GanglionTransport {
       }
 
       this.started = true;
+      this.currentBackoffMs = ProtocolDefaults.RECONNECT_INITIAL_DELAY_MS;
       this.startHeartbeat();
       console.log("[Ganglion] Authenticated with Brain");
 
@@ -310,6 +338,41 @@ export class BrainWebSocketTransport implements GanglionTransport {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closedManually || this.reconnectTimer) return;
+
+    const min = this.currentBackoffMs * ProtocolDefaults.RECONNECT_JITTER_MIN_FACTOR;
+    const max = this.currentBackoffMs * ProtocolDefaults.RECONNECT_JITTER_MAX_FACTOR;
+    const delayMs = Math.round(min + Math.random() * (max - min));
+
+    this.currentBackoffMs = Math.min(
+      this.currentBackoffMs * ProtocolDefaults.RECONNECT_BACKOFF_MULTIPLIER,
+      ProtocolDefaults.RECONNECT_MAX_DELAY_MS,
+    );
+
+    console.log(`[Ganglion] Scheduling reconnect to Brain in ${delayMs}ms (base: ${this.currentBackoffMs}ms)`);
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = undefined;
+      if (this.closedManually) return;
+      try {
+        await this.connect();
+      } catch (error) {
+        console.log(`[Ganglion] Reconnection attempt failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }, delayMs);
+
+    if (this.reconnectTimer.unref) {
+      this.reconnectTimer.unref();
+    }
+  }
+
+  private stopReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
     }
   }
 }
