@@ -85,7 +85,9 @@ export class AppLauncherAdapter implements CapabilityAdapter {
     return [
       {
         name: "open_app_or_url",
-        description: "Open a pre-registered application or URL on the desktop. Strictly restricted to human-approved registered targets and requires explicit user action approval.",
+        // The names are labels a human wrote; listing them is what lets the agent pick one at all.
+        description: "Open a pre-registered application or URL on the desktop. Strictly restricted to human-approved registered targets and requires explicit user action approval. " +
+          `Registered names: ${this.policy.allowedTargets.map((t) => t.name).join(", ")}.`,
         inputSchema: INPUT_SCHEMA,
         permission: "action",
         family: this.family,
