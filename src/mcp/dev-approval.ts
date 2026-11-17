@@ -1,6 +1,6 @@
 import type { ApprovalProvider } from "./types.ts";
 
-const PROCESS_ACTIONS = new Set(["process.start", "process.terminate"]);
+const PROCESS_ACTIONS = new Set(["process.terminate"]);
 
 export function parseGanglionDevAutoApproveProcessActions(
   value = process.env.GANGLION_DEV_AUTO_APPROVE_PROCESS_ACTIONS,

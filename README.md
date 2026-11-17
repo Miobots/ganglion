@@ -12,14 +12,13 @@ Bun, one lockfile, one pinned TypeScript — the same toolchain as `miobots-brai
 
 Design documentation is in the Obsidian vault two levels up.
 
-**Status: Phase 3 MCP server core.** The MCP server is functional and independently testable, but
-the Phase 2 Brain WebSocket transport adapter remains a separate integration dependency.
+**Status: MCP server and Brain WebSocket transport are implemented.**
 
-Phase 3 exposes an independently testable MCP server core through an injected transport. It does
-not open a listener or implement the Brain WebSocket adapter. Only explicitly registered tools are
+The server core is independently testable through an injected transport. Only explicitly registered tools are
 advertised. Filesystem tools operate inside human-approved directories, use read/action permissions,
-refuse overwrites unless explicitly requested, require approval for actions and deletion, and record
-operation metadata without file content. Filesystem tools are disabled unless an allowed-directory
+refuse overwrites unless explicitly requested, and require approval for actions and deletion.
+Filesystem operation metadata is kept in memory for tests; Brain's durable audit chain is not
+implemented yet. Filesystem tools are disabled unless an allowed-directory
 policy is supplied.
 
 Set `GANGLION_FILESYSTEM_POLICY` to a JSON policy to enable them:
@@ -54,7 +53,7 @@ export GANGLION_PROCESS_MANAGEMENT='{"enabled":true,"clockTicksPerSecond":100,"s
 For isolated local end-to-end testing only, Ganglion separately supports
 `GANGLION_DEV_AUTO_APPROVE_PROCESS_ACTIONS=true`. It is accepted only with
 `NODE_ENV=development`; other environments fail startup rather than enabling the bypass. The flag
-approves only `process.start` and `process.terminate` and does not change filesystem or unrelated
+approves only `process.terminate` and does not change filesystem or unrelated
 action permissions. Process tools still require `GANGLION_PROCESS_MANAGEMENT` to be enabled, and
 ProcessManager continues to enforce protected PIDs, PID/start-time identity checks, OS permissions,
 and explicit signal selection. This is not a trusted approval UI and must not be used in production.
@@ -65,9 +64,9 @@ does not execute `getconf`). `sampleIntervalMs` defaults to 1000 ms. CPU percent
 100% represents one logical CPU fully utilized and values can exceed 100% on multicore workloads.
 The first sample establishes a baseline, so CPU remains unavailable until a subsequent sample.
 
-The adapter exposes five tools: `process.list` lists visible processes, `process.get_info` retrieves
-one process, `process.find` filters the list, `process.start` launches an arbitrary executable, and
-`process.terminate` signals one specifically selected process. Name matching in `process.find` is
+The adapter exposes four tools: `process.list` lists visible processes, `process.get_info` retrieves
+one process, `process.find` filters the list, and `process.terminate` signals one specifically
+selected process. Name matching in `process.find` is
 case-insensitive and partial; executable and username filters are exact. Filters combine with AND,
 and the tool returns all matches rather than selecting one.
 
@@ -78,13 +77,9 @@ Ganglion reject a stale selection if the PID now belongs to a different process.
 eliminate the small race between the final `/proc` check and signaling; native pidfd support is not
 implemented.
 
-Process reads use the existing `read` permission. Start and termination use the existing `action`
-permission and trusted, non-voice approval flow. Enabling this feature does not approve actions; the
-development approval provider still only approves its existing `filesystem.*` scope. Starting
-supports arbitrary executable names or paths and argument arrays, without a profile allowlist. It
-does not use a shell, and `confined_process` is a capability label, not an OS sandbox. Arguments are
-omitted from approval targets and child processes receive only `PATH`, not Ganglion's other
-environment variables.
+Process reads use the existing `read` permission. Termination uses the existing `action`
+permission and trusted, non-voice approval flow. Enabling this feature does not approve actions.
+Ganglion does not expose arbitrary process launch; scripts must be registered by ID in a future tool.
 
 Termination is limited by the OS permissions of the user running Ganglion. PID 1, Ganglion itself,
 Ganglion's ancestors, and configured `protectedPids` are protected. `SIGTERM` is the default;

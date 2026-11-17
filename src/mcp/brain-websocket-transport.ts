@@ -9,6 +9,8 @@ import {
   newEnvelope,
   parse,
   ProtocolDefaults,
+  ProtocolError,
+  ProtocolErrorCode,
   SequenceCounter,
   SystemHealth,
   Topics,
@@ -142,8 +144,6 @@ export class BrainWebSocketTransport implements GanglionTransport {
         throw new Error(`Missing Protocol correlation for MCP response ${rpcId}`);
       }
 
-      this.pendingCorrelations.delete(rpcId);
-
       const envelope = newEnvelope({
         kind: Kind.EVT,
         topic: Topics.MCP_RESPONSE,
@@ -152,7 +152,28 @@ export class BrainWebSocketTransport implements GanglionTransport {
         payload: message as never,
       });
 
-      socket.send(encode(envelope));
+      let wire: string;
+      try {
+        wire = encode(envelope);
+      } catch (error) {
+        if (!(error instanceof ProtocolError) || error.code !== ProtocolErrorCode.ERR_PAYLOAD_TOO_LARGE) throw error;
+        wire = encode(newEnvelope({
+          kind: Kind.EVT,
+          topic: Topics.MCP_RESPONSE,
+          corr_id: correlationId,
+          seq: envelope.seq,
+          payload: {
+            jsonrpc: "2.0",
+            id: rpcId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: JSON.stringify({ code: "result_too_large", message: "MCP result exceeds the wire limit" }) }],
+            },
+          },
+        }));
+      }
+      socket.send(wire);
+      this.pendingCorrelations.delete(rpcId);
       return;
     }
 

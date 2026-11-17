@@ -6,7 +6,7 @@ import { parseProcessManagementConfiguration } from "../src/mcp/process/policy.t
 import type { ProcessCpuSampler } from "../src/mcp/process/process-cpu-sampler.ts";
 import type { ProcessInspector } from "../src/mcp/process/process-inspector.ts";
 import type { ProcessManager } from "../src/mcp/process/process-manager.ts";
-import type { ProcessInfo, ProcessInspectionResult, ProcessStartResult, ProcessTerminationResult } from "../src/mcp/process/types.ts";
+import type { ProcessInfo, ProcessInspectionResult, ProcessTerminationResult } from "../src/mcp/process/types.ts";
 import type { RegisteredTool } from "../src/mcp/types.ts";
 
 describe("ProcessAdapter", () => {
@@ -20,14 +20,13 @@ describe("ProcessAdapter", () => {
       .toThrow(/supported settings/);
   });
 
-  it("registers exactly five tools with read/action permissions and is Linux-only", () => {
+  it("registers exactly four tools with read/action permissions and is Linux-only", () => {
     const adapter = createAdapter({ platform: "linux" });
     expect(adapter.isAvailable()).toBe(true);
     expect(adapter.tools().map(({ name, permission }) => [name, permission])).toEqual([
       ["process.list", "read"],
       ["process.get_info", "read"],
       ["process.find", "read"],
-      ["process.start", "action"],
       ["process.terminate", "action"],
     ]);
     expect(createAdapter({ platform: "win32" }).isAvailable()).toBe(false);
@@ -87,43 +86,6 @@ describe("ProcessAdapter", () => {
     await expect(find.handler({ name: "not-present" }, {})).resolves.toMatchObject({ count: 0, processes: [] });
   });
 
-  it("requests start approval once without arguments and calls the manager only after approval", async () => {
-    const harness = createAdapterHarness();
-    const request = await tool(harness.adapter, "process.start").approvalRequest?.({
-      executable: "/opt/private-runner",
-      args: ["--token=secret-value"],
-      cwd: "/srv/work",
-    });
-    expect(request).toEqual({
-      target: JSON.stringify({ executable: "/opt/private-runner", cwd: "/srv/work" }),
-      reason: "Start arbitrary executable",
-    });
-    expect(JSON.stringify(request)).not.toContain("secret-value");
-
-    const registry = new DefaultToolRegistry(new DefaultPermissionManager({
-      isTrusted: () => true,
-      isVoiceApproval: () => false,
-      requestApproval: async (approval) => { harness.approvals.push(approval); return true; },
-    }));
-    registerAll(registry, harness.adapter);
-    await expect(registry.execute("process.start", { executable: "/bin/demo", args: ["safe"] })).resolves.toEqual(startResult);
-    expect(harness.approvals).toHaveLength(1);
-    expect(harness.manager.startCalls).toEqual([{ executable: "/bin/demo", args: ["safe"] }]);
-  });
-
-  it("never calls ProcessManager when start approval is denied", async () => {
-    const harness = createAdapterHarness();
-    const registry = new DefaultToolRegistry(new DefaultPermissionManager({
-      isTrusted: () => true,
-      isVoiceApproval: () => false,
-      requestApproval: async () => false,
-    }));
-    registerAll(registry, harness.adapter);
-
-    await expect(registry.execute("process.start", { executable: "/bin/demo", args: ["private-value"] })).rejects.toThrow(/not approved/);
-    expect(harness.manager.startCalls).toHaveLength(0);
-  });
-
   it("requests specific termination approval and forwards only selected PID identity", async () => {
     const harness = createAdapterHarness();
     const terminationTool = tool(harness.adapter, "process.terminate");
@@ -167,9 +129,6 @@ describe("ProcessAdapter", () => {
   });
 });
 
-const startResult: ProcessStartResult = {
-  status: "started", pid: 500, executable: "/bin/demo", workingDirectory: "/work", error: null,
-};
 const terminationResult: ProcessTerminationResult = {
   status: "signalled", pid: 41, signal: "SIGTERM", signalSent: true, error: null,
 };
@@ -187,9 +146,7 @@ function createAdapterHarness(overrides: { processes?: ProcessInfo[]; platform?:
   };
   const sampler = { startCalls: 0, stopCalls: 0, start: async () => { sampler.startCalls++; }, stop: async () => { sampler.stopCalls++; } };
   const manager = {
-    startCalls: [] as unknown[],
     terminateCalls: [] as unknown[],
-    startProcess: async (options: unknown) => { manager.startCalls.push(options); return startResult; },
     terminateProcess: async (options: unknown) => { manager.terminateCalls.push(options); return terminationResult; },
   };
   const approvals: Array<{ toolName: string; tier: "action"; target?: string; reason: string }> = [];

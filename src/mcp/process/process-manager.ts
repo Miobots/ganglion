@@ -1,30 +1,19 @@
-import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { stat as nodeStat } from "node:fs/promises";
 import { ProcessInspector } from "./process-inspector.ts";
 import type {
   ProcessIdentity,
   ProcessInspectionResult,
-  ProcessLaunchOptions,
   ProcessManagementPolicy,
   ProcessManagerError,
-  ProcessStartResult,
   ProcessTerminationOptions,
   ProcessTerminationResult,
   SupportedTerminationSignal,
 } from "./types.ts";
 
-export interface ProcessManagerFileSystem {
-  stat(path: string): Promise<{ isDirectory(): boolean }>;
-}
-
 export interface ProcessManagerOptions {
   policy: ProcessManagementPolicy;
   procRoot?: string;
   inspector?: Pick<ProcessInspector, "getProcessInfo">;
-  spawnProcess?: typeof nodeSpawn;
   signalProcess?: (pid: number, signal: SupportedTerminationSignal) => boolean;
-  fileSystem?: ProcessManagerFileSystem;
-  getWorkingDirectory?: () => string;
 }
 
 interface AncestorResult {
@@ -32,20 +21,12 @@ interface AncestorResult {
   error?: ProcessManagerError;
 }
 
-const NODE_FILESYSTEM: ProcessManagerFileSystem = {
-  stat: (path) => nodeStat(path),
-};
-const DEFAULT_EXECUTION_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-
 export class ProcessManager {
   private readonly policy: ProcessManagementPolicy;
   private readonly protectedPids: Set<number>;
   private readonly ganglionPid: number;
   private readonly inspector: Pick<ProcessInspector, "getProcessInfo">;
-  private readonly spawnProcess: typeof nodeSpawn;
   private readonly signalProcess: (pid: number, signal: SupportedTerminationSignal) => boolean;
-  private readonly fileSystem: ProcessManagerFileSystem;
-  private readonly getWorkingDirectory: () => string;
 
   constructor(options: ProcessManagerOptions) {
     if (!options.policy || typeof options.policy.enabled !== "boolean") {
@@ -62,76 +43,7 @@ export class ProcessManager {
     this.protectedPids = new Set([1, ganglionPid, ...protectedPids]);
     this.ganglionPid = ganglionPid;
     this.inspector = options.inspector ?? new ProcessInspector({ procRoot: options.procRoot });
-    this.spawnProcess = options.spawnProcess ?? nodeSpawn;
     this.signalProcess = options.signalProcess ?? ((pid, signal) => process.kill(pid, signal));
-    this.fileSystem = options.fileSystem ?? NODE_FILESYSTEM;
-    this.getWorkingDirectory = options.getWorkingDirectory ?? (() => process.cwd());
-  }
-
-  async startProcess(options: ProcessLaunchOptions): Promise<ProcessStartResult> {
-    const input = asRecord(options);
-    const executable = typeof input?.executable === "string" ? input.executable : null;
-    const argsValue = input?.args;
-    const requestedCwd = input?.cwd;
-    let workingDirectory: string | null = typeof requestedCwd === "string" ? requestedCwd : null;
-
-    if (!this.policy.enabled) {
-      return this.startFailure(executable, workingDirectory, "process_management_disabled", "Process management is disabled");
-    }
-    if (executable === null || executable.trim().length === 0 || executable.includes("\0")) {
-      return this.startFailure(executable, workingDirectory, "invalid_executable", "Executable must be a non-empty string without null bytes");
-    }
-    if (argsValue !== undefined && (!Array.isArray(argsValue) || Array.from(argsValue).some((arg) => typeof arg !== "string" || arg.includes("\0")))) {
-      return this.startFailure(executable, workingDirectory, "invalid_arguments", "Arguments must be strings without null bytes");
-    }
-    const args = (argsValue ?? []) as string[];
-
-    if (requestedCwd !== undefined) {
-      if (typeof requestedCwd !== "string" || requestedCwd.trim().length === 0 || requestedCwd.includes("\0")) {
-        return this.startFailure(executable, workingDirectory, "invalid_cwd", "Working directory must be a non-empty path without null bytes");
-      }
-      try {
-        if (!(await this.fileSystem.stat(requestedCwd)).isDirectory()) {
-          return this.startFailure(executable, requestedCwd, "invalid_cwd", "Working directory is not a directory");
-        }
-      } catch (error) {
-        const code = errorCode(error);
-        return this.startFailure(
-          executable,
-          requestedCwd,
-          code === "EACCES" || code === "EPERM" ? "permission_denied" : "invalid_cwd",
-          code === "EACCES" || code === "EPERM" ? "Working directory access was denied" : "Working directory does not exist or is unavailable",
-        );
-      }
-    } else {
-      try {
-        workingDirectory = this.getWorkingDirectory();
-      } catch {
-        return this.startFailure(executable, null, "working_directory_unavailable", "Ganglion working directory is unavailable");
-      }
-    }
-
-    const spawnOptions: SpawnOptions = {
-      shell: false,
-      detached: false,
-      stdio: "ignore",
-      env: { PATH: process.env.PATH ?? DEFAULT_EXECUTION_PATH },
-      ...(requestedCwd === undefined ? {} : { cwd: requestedCwd as string }),
-    };
-
-    try {
-      const child = this.spawnProcess(executable, args, spawnOptions);
-      const pid = await waitForSpawn(child);
-      return { status: "started", pid, executable, workingDirectory, error: null };
-    } catch (error) {
-      const code = errorCode(error);
-      const errorResult = code === "ENOENT"
-        ? { code: "executable_not_found", message: "Executable could not be found or started from the requested working directory" }
-        : code === "EACCES" || code === "EPERM"
-          ? { code: "permission_denied", message: "Operating system denied process creation" }
-          : { code: "spawn_error", message: "Operating system could not start the process" };
-      return { status: "failed", pid: null, executable, workingDirectory, error: errorResult };
-    }
   }
 
   async terminateProcess(options: ProcessTerminationOptions): Promise<ProcessTerminationResult> {
@@ -245,15 +157,6 @@ export class ProcessManager {
     return { pids: ancestors };
   }
 
-  private startFailure(
-    executable: string | null,
-    workingDirectory: string | null,
-    code: string,
-    message: string,
-  ): ProcessStartResult {
-    return { status: code === "process_management_disabled" ? "disabled" : "failed", pid: null, executable, workingDirectory, error: { code, message } };
-  }
-
   private terminationFailure(
     status: ProcessTerminationResult["status"],
     pid: number | null,
@@ -263,29 +166,6 @@ export class ProcessManager {
   ): ProcessTerminationResult {
     return { status, pid, signal, signalSent: false, error: { code, message } };
   }
-}
-
-function waitForSpawn(child: ChildProcess): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const cleanup = (): void => {
-      child.removeListener("spawn", onSpawn);
-      child.removeListener("error", onError);
-    };
-    const onSpawn = (): void => {
-      cleanup();
-      if (!isValidPid(child.pid)) {
-        reject(Object.assign(new Error("Spawned process PID was unavailable"), { code: "EPROTO" }));
-        return;
-      }
-      resolve(child.pid);
-    };
-    const onError = (error: Error): void => {
-      cleanup();
-      reject(error);
-    };
-    child.once("spawn", onSpawn);
-    child.once("error", onError);
-  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

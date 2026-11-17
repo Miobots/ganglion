@@ -87,12 +87,6 @@ export interface ProcessEnumerationResult {
   errors: ProcessInspectionError[];
 }
 
-export interface ProcessLaunchOptions {
-  executable: string;
-  args?: string[];
-  cwd?: string;
-}
-
 export type SupportedTerminationSignal = "SIGTERM" | "SIGKILL";
 
 export interface ProcessTerminationOptions {
@@ -114,14 +108,6 @@ export interface ProcessManagementConfiguration extends ProcessManagementPolicy 
 export interface ProcessManagerError {
   code: string;
   message: string;
-}
-
-export interface ProcessStartResult {
-  status: "started" | "disabled" | "failed";
-  pid: number | null;
-  executable: string | null;
-  workingDirectory: string | null;
-  error: ProcessManagerError | null;
 }
 
 export type ProcessTerminationStatus =

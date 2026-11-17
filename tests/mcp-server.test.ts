@@ -395,7 +395,6 @@ describe("Ganglion MCP server core", () => {
       "process.find",
       "process.get_info",
       "process.list",
-      "process.start",
       "process.terminate",
     ]);
     await enabledClient.close();

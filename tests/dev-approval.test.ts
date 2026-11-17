@@ -16,7 +16,7 @@ describe("Ganglion development process-action approval", () => {
     expect(() => parseGanglionDevAutoApproveProcessActions("yes", "development")).toThrow(/'true' or 'false'/);
   });
 
-  it("approves exactly process.start and process.terminate only when opted in", async () => {
+  it("approves only process.terminate when opted in", async () => {
     const off = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: false });
     const on = createGanglionDevApprovalProvider({ allowFilesystemActions: false, allowProcessActions: true });
     const processStart = approvalRequest("process.start");
@@ -26,7 +26,7 @@ describe("Ganglion development process-action approval", () => {
 
     expect(await off.requestApproval(processStart)).toBe(false);
     expect(await off.requestApproval(processTerminate)).toBe(false);
-    expect(await on.requestApproval(processStart)).toBe(true);
+    expect(await on.requestApproval(processStart)).toBe(false);
     expect(await on.requestApproval(processTerminate)).toBe(true);
     expect(await on.requestApproval(filesystemAction)).toBe(false);
     expect(await on.requestApproval(unrelatedAction)).toBe(false);

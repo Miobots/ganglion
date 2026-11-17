@@ -1,102 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { EventEmitter } from "node:events";
-import type { ChildProcess, SpawnOptions, spawn as nodeSpawn } from "node:child_process";
 import { ProcessManager, type ProcessManagerOptions } from "../src/mcp/process/process-manager.ts";
 import type { ProcessInfo, ProcessInspectionResult, SupportedTerminationSignal } from "../src/mcp/process/types.ts";
-
-describe("ProcessManager starting processes", () => {
-  it("passes executable, individual args, and cwd directly to spawn without a shell or output capture", async () => {
-    const harness = createHarness();
-    const result = await harness.manager.startProcess({
-      executable: "/opt/tools/worker",
-      args: ["two words", "$(touch /tmp/should-not-run)", "; sudo whoami"],
-      cwd: "/work",
-    });
-
-    expect(result).toEqual({
-      status: "started",
-      pid: 4321,
-      executable: "/opt/tools/worker",
-      workingDirectory: "/work",
-      error: null,
-    });
-    expect(harness.spawn.calls).toHaveLength(1);
-    expect(harness.spawn.calls[0]).toMatchObject({
-      executable: "/opt/tools/worker",
-      args: ["two words", "$(touch /tmp/should-not-run)", "; sudo whoami"],
-      options: { shell: false, detached: false, stdio: "ignore", cwd: "/work" },
-    });
-    expect(Object.keys(harness.spawn.calls[0]!.options.env ?? {})).toEqual(["PATH"]);
-  });
-
-  it("defaults args to an empty array and reports the actual inherited working directory", async () => {
-    const harness = createHarness({ getWorkingDirectory: () => "/ganglion" });
-    const result = await harness.manager.startProcess({ executable: "worker" });
-
-    expect(result).toMatchObject({ status: "started", executable: "worker", workingDirectory: "/ganglion" });
-    expect(harness.spawn.calls[0]?.args).toEqual([]);
-    expect(harness.spawn.calls[0]?.options).not.toHaveProperty("cwd");
-  });
-
-  it("rejects invalid executable values without invoking spawn", async () => {
-    const harness = createHarness();
-    const inputs = [
-      { executable: "" },
-      { executable: "   " },
-      { executable: "/bin/tool\0bad" },
-      { executable: null },
-    ];
-
-    for (const input of inputs) {
-      const result = await harness.manager.startProcess(input as never);
-      expect(result.status).toBe("failed");
-    }
-    expect(harness.spawn.calls).toHaveLength(0);
-  });
-
-  it("rejects invalid argument types and null bytes", async () => {
-    const harness = createHarness();
-    for (const args of [null, "one string", ["ok", 4], ["bad\0arg"], new Array(1)]) {
-      const result = await harness.manager.startProcess({ executable: "worker", args } as never);
-      expect(result.error?.code).toBe("invalid_arguments");
-    }
-    expect(harness.spawn.calls).toHaveLength(0);
-  });
-
-  it("rejects invalid, nonexistent, and non-directory working directories", async () => {
-    const harness = createHarness({
-      fileSystem: { stat: async (path) => ({ isDirectory: () => path === "/work" }) },
-    });
-    for (const cwd of ["", "  ", "/work\0bad", 3, null]) {
-      const result = await harness.manager.startProcess({ executable: "worker", cwd } as never);
-      expect(result.error?.code).toBe("invalid_cwd");
-    }
-    expect((await harness.manager.startProcess({ executable: "worker", cwd: "/missing" })).error?.code).toBe("invalid_cwd");
-    expect(harness.spawn.calls).toHaveLength(0);
-  });
-
-  it("returns an executable-not-found result for an asynchronous ENOENT", async () => {
-    const harness = createHarness({ spawnProcess: fakeSpawner({ event: "error", error: codedError("ENOENT") }).spawnProcess });
-    const result = await harness.manager.startProcess({ executable: "missing-command", args: ["secret", "value"] });
-
-    expect(result).toMatchObject({ status: "failed", pid: null, error: { code: "executable_not_found" } });
-    expect(JSON.stringify(result)).not.toContain("secret");
-  });
-
-  it("handles asynchronous spawn errors and never returns before spawn is accepted", async () => {
-    const harness = createHarness({ spawnProcess: fakeSpawner({ event: "error", error: codedError("EACCES") }).spawnProcess });
-    const result = await harness.manager.startProcess({ executable: "/restricted/tool" });
-    expect(result).toMatchObject({ status: "failed", error: { code: "permission_denied" } });
-  });
-
-  it("does not start processes when process management is disabled", async () => {
-    const harness = createHarness({ policy: { enabled: false, ganglionPid: 100 } });
-    const result = await harness.manager.startProcess({ executable: "worker" });
-
-    expect(result.status).toBe("disabled");
-    expect(harness.spawn.calls).toHaveLength(0);
-  });
-});
 
 describe("ProcessManager terminating processes", () => {
   it("uses SIGTERM by default and revalidates identity immediately before signalling", async () => {
@@ -211,14 +115,7 @@ describe("ProcessManager terminating processes", () => {
   });
 });
 
-interface SpawnCall {
-  executable: string;
-  args: string[];
-  options: SpawnOptions;
-}
-
 function createHarness(overrides: Partial<ProcessManagerOptions> = {}) {
-  const spawn = fakeSpawner();
   const signalCalls: Array<{ pid: number; signal: SupportedTerminationSignal }> = [];
   const signalProcess = (pid: number, signal: SupportedTerminationSignal): boolean => {
     signalCalls.push({ pid, signal });
@@ -228,27 +125,10 @@ function createHarness(overrides: Partial<ProcessManagerOptions> = {}) {
   const manager = new ProcessManager({
     policy: { enabled: true, ganglionPid: 100 },
     inspector,
-    spawnProcess: spawn.spawnProcess,
     signalProcess,
-    fileSystem: { stat: async () => ({ isDirectory: () => true }) },
-    getWorkingDirectory: () => "/service",
     ...overrides,
   });
-  return { manager, spawn, signal: { calls: signalCalls }, inspector: inspector as ReturnType<typeof createInspector> };
-}
-
-function fakeSpawner(options: { event?: "spawn" | "error"; error?: Error; pid?: number } = {}) {
-  const calls: SpawnCall[] = [];
-  const spawnProcess = ((executable: string, args: string[], spawnOptions: SpawnOptions) => {
-    calls.push({ executable, args, options: spawnOptions });
-    const child = Object.assign(new EventEmitter(), { pid: options.pid ?? 4321 }) as ChildProcess;
-    queueMicrotask(() => {
-      if (options.event === "error") child.emit("error", options.error ?? new Error("spawn failed"));
-      else child.emit("spawn");
-    });
-    return child;
-  }) as typeof nodeSpawn;
-  return { spawnProcess, calls };
+  return { manager, signal: { calls: signalCalls }, inspector: inspector as ReturnType<typeof createInspector> };
 }
 
 function createInspector(

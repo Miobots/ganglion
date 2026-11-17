@@ -4,7 +4,6 @@ import type { ProcessManager } from "../process/process-manager.ts";
 import type {
   ProcessEnumerationResult,
   ProcessInfo,
-  ProcessLaunchOptions,
   ProcessTerminationOptions,
   SupportedTerminationSignal,
 } from "../process/types.ts";
@@ -13,7 +12,7 @@ import type { CapabilityAdapter, RegisteredTool, ToolSchema } from "../types.ts"
 export interface ProcessAdapterOptions {
   inspector: Pick<ProcessInspector, "listProcesses" | "getProcessInfo">;
   sampler: Pick<ProcessCpuSampler, "start" | "stop">;
-  manager: Pick<ProcessManager, "startProcess" | "terminateProcess">;
+  manager: Pick<ProcessManager, "terminateProcess">;
   platform?: NodeJS.Platform;
 }
 
@@ -108,26 +107,6 @@ export class ProcessAdapter implements CapabilityAdapter {
         handler: async (input) => this.findProcesses(input),
       },
       {
-        name: "process.start",
-        description: "Start an arbitrary executable path or name with argument-array semantics (no shell). This capability does not provide an OS sandbox or executable allowlist. Requires trusted action approval; raw arguments are not included in the approval request.",
-        inputSchema: objectSchema({
-          executable: { type: "string", minLength: 1, maxLength: 4_096 },
-          args: { type: "array", maxItems: 256, items: { type: "string", maxLength: 16_384 } },
-          cwd: { type: "string", minLength: 1, maxLength: 4_096 },
-        }, ["executable"]),
-        permission: "action",
-        family: this.family,
-        enabled: true,
-        approvalRequest: async (input) => {
-          const launch = validateLaunchInput(input);
-          return {
-            target: JSON.stringify({ executable: launch.executable, ...(launch.cwd ? { cwd: launch.cwd } : {}) }),
-            reason: "Start arbitrary executable",
-          };
-        },
-        handler: async (input) => this.manager.startProcess(validateLaunchInput(input)),
-      },
-      {
         name: "process.terminate",
         description: "Signal one specifically selected process using PID and startTimeTicks from process.find. Defaults to SIGTERM; SIGKILL is forceful and must be explicitly selected. Requires trusted action approval and revalidates protected-process policy and identity.",
         inputSchema: objectSchema({
@@ -213,27 +192,6 @@ function validateFindInput(value: unknown): ProcessFindInput {
   if (input.pid !== undefined) filters.pid = strictPid(input.pid);
   if (Object.keys(filters).length === 0) throw new Error("At least one process filter is required");
   return filters;
-}
-
-function validateLaunchInput(value: unknown): ProcessLaunchOptions {
-  const input = asRecord(value);
-  if (!input || Object.keys(input).some((key) => !["executable", "args", "cwd"].includes(key))) {
-    throw new Error("Process start arguments are invalid");
-  }
-  if (typeof input.executable !== "string" || input.executable.trim().length === 0 || input.executable.includes("\0")) {
-    throw new Error("Executable must be a non-empty string without null bytes");
-  }
-  if (input.args !== undefined && (!Array.isArray(input.args) || Array.from(input.args).some((arg) => typeof arg !== "string" || arg.includes("\0")))) {
-    throw new Error("Arguments must be an array of strings without null bytes");
-  }
-  if (input.cwd !== undefined && (typeof input.cwd !== "string" || input.cwd.trim().length === 0 || input.cwd.includes("\0"))) {
-    throw new Error("Working directory must be a non-empty string without null bytes");
-  }
-  return {
-    executable: input.executable,
-    ...(input.args === undefined ? {} : { args: input.args as string[] }),
-    ...(input.cwd === undefined ? {} : { cwd: input.cwd as string }),
-  };
 }
 
 function validateTerminationInput(value: unknown): ProcessTerminationOptions {
