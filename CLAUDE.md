@@ -63,10 +63,16 @@ until now, which is the drift `DECISIONS_PENDING.md` predicted when decision 21 
 
 ## Current state
 
-Phase 3 contains a functional, transport-injected MCP server core. The official MCP SDK owns the
-MCP lifecycle; Ganglion owns registration, local permissions, approved-directory filesystem tools,
-and the system-status adapter. The Phase 2 Brain WebSocket adapter remains a separate integration
-dependency. Ganglion still does not open a listener or communicate directly with Heart or Synapse.
+The daemon dials out to Brain over `BrainWebSocketTransport` and serves MCP over it. The official
+MCP SDK owns the MCP lifecycle; Ganglion owns registration, local permissions, and the adapters:
+system status (battery, CPU load, memory, disk), approved-directory filesystem, app launcher, opt-in
+process management, and screen capture. Ganglion still does not open a listener or communicate
+directly with Heart or Synapse.
+
+Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26), which runs
+read-tier tools only until `G2.3` brings an approval surface. **There is no pairing yet (`G0.2`).**
+The daemon authenticates with the shared `DEV_TOKEN`, and Brain admits it only when its device ID
+is listed in `MCP_ALLOWED_GANGLION_DEVICE_IDS`.
 
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.
