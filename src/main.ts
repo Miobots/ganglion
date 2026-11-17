@@ -4,23 +4,26 @@ import { BrainWebSocketTransport } from "./mcp/brain-websocket-transport.ts";
 import { parseFilesystemPolicy } from "./mcp/filesystem/policy.ts";
 import { parseProcessManagementConfiguration } from "./mcp/process/policy.ts";
 import { parseAppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
+import { readCredentials, readPairedConfig } from "./pairing.ts";
 import { createGanglionDevApprovalProvider, parseGanglionDevAutoApproveProcessActions } from "./mcp/dev-approval.ts";
 
-const brainUrl = process.env.BRAIN_WS_URL ?? "ws://127.0.0.1:8080/ws";
-const deviceId = process.env.GANGLION_DEVICE_ID;
-const token = process.env.DEV_TOKEN;
-const filesystem = parseFilesystemPolicy(process.env.GANGLION_FILESYSTEM_POLICY);
+// What `bun run pair` saved; environment variables override it for development.
+const credentials = await readCredentials();
+const paired = await readPairedConfig();
+const brainUrl = process.env.BRAIN_WS_URL ?? credentials?.brain_url ?? "ws://127.0.0.1:8080/ws";
+const deviceId = process.env.GANGLION_DEVICE_ID ?? credentials?.device_id;
+const token = process.env.GANGLION_TOKEN ?? credentials?.token;
+const filesystem = parseFilesystemPolicy(
+  process.env.GANGLION_FILESYSTEM_POLICY ?? (paired?.filesystem ? JSON.stringify(paired.filesystem) : undefined),
+);
 const processManagement = parseProcessManagementConfiguration(process.env.GANGLION_PROCESS_MANAGEMENT);
 const appLauncher = parseAppLauncherPolicy(process.env.GANGLION_APP_ALLOWLIST);
 const allowFilesystemActions = process.env.MCP_DEV_ALLOW_FILESYSTEM_ACTIONS === "true";
 const allowProcessActions = parseGanglionDevAutoApproveProcessActions();
 
-if (!deviceId) {
-  throw new Error("GANGLION_DEVICE_ID is required");
-}
-
-if (!token) {
-  throw new Error("DEV_TOKEN is required");
+if (!deviceId || !token) {
+  console.error("Ganglion is not paired yet. Run: bun run pair --folder <a folder Mio may read>");
+  process.exit(1);
 }
 
 const transport = new BrainWebSocketTransport({

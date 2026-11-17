@@ -70,9 +70,13 @@ process management, and screen capture. Ganglion still does not open a listener 
 directly with Heart or Synapse.
 
 Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26), which runs
-read-tier tools only until `G2.3` brings an approval surface. **There is no pairing yet (`G0.2`).**
-The daemon authenticates with the shared `DEV_TOKEN`, and Brain admits it only when its device ID
-is listed in `MCP_ALLOWED_GANGLION_DEVICE_IDS`.
+read-tier tools only until `G2.3` brings an approval surface.
+
+**A daemon connects only with its own paired token** (GANGLION_DECISIONS 29). `bun run pair
+--folder <dir>` shows a six-digit code, a human types it into the app, and the token lands in
+`~/.config/miobots-ganglion/credentials.json` (mode 0600) beside `config.json`, which holds the
+approved folders. **No tool may ever write either file**; that is what keeps the folder list out
+of the agent's reach.
 
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.

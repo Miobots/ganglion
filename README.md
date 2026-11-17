@@ -4,8 +4,16 @@ See `CLAUDE.md` for the rules that apply here.
 
 ```bash
 bun install
+bun run pair --folder ~/Documents/Mio   # once: shows a six-digit code to type into the app
 bun start
 ```
+
+`bun run pair` connects to Brain (`--brain`, default `ws://127.0.0.1:8080/ws`), shows a code, and
+waits up to five minutes for someone to type it into the app (Devices → Pair a laptop). It then
+saves this laptop's own token to `~/.config/miobots-ganglion/credentials.json` (mode 0600) and the
+approved folders, read-only, to `config.json` beside it. Repeat `--folder` for more folders; run it
+again to re-pair. For development, `BRAIN_WS_URL`, `GANGLION_DEVICE_ID`, `GANGLION_TOKEN` and
+`GANGLION_FILESYSTEM_POLICY` override the saved files.
 
 Bun, one lockfile, one pinned TypeScript — the same toolchain as `miobots-brain` and
 `miobots-protocol` (BRAIN_DECISIONS 21).

@@ -78,7 +78,11 @@ export class SecureFilesystem {
     const absolute = this.absolutePath(path, write);
     const candidate = await this.canonicalCandidate(absolute, allowMissing);
     const root = this.approved.find((item) => isContained(item.path, candidate) && (!write || item.allowWrite));
-    if (!root) throw new Error("Filesystem path is outside approved directories or not permitted");
+    if (!root) {
+      // G0.3: a request outside the approved folders is refused and logged.
+      console.warn(`[Ganglion] Refused ${write ? "write" : "read"} outside the approved folders: ${candidate}`);
+      throw new Error("Filesystem path is outside approved directories or not permitted");
+    }
     return { path: candidate, root: root.path };
   }
 
