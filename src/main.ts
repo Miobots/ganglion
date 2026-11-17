@@ -17,7 +17,9 @@ const filesystem = parseFilesystemPolicy(
   process.env.GANGLION_FILESYSTEM_POLICY ?? (paired?.filesystem ? JSON.stringify(paired.filesystem) : undefined),
 );
 const processManagement = parseProcessManagementConfiguration(process.env.GANGLION_PROCESS_MANAGEMENT);
-const appLauncher = parseAppLauncherPolicy(process.env.GANGLION_APP_ALLOWLIST);
+const appLauncher = parseAppLauncherPolicy(
+  process.env.GANGLION_APP_ALLOWLIST ?? (paired?.appLauncher ? JSON.stringify(paired.appLauncher) : undefined),
+);
 const allowFilesystemActions = process.env.MCP_DEV_ALLOW_FILESYSTEM_ACTIONS === "true";
 const allowProcessActions = parseGanglionDevAutoApproveProcessActions();
 

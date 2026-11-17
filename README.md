@@ -100,7 +100,9 @@ environment variables.
 ## App and URL Launcher
 
 The `open_app_or_url` tool exposes registered application and website launching. It is disabled
-unless an explicit target allowlist is provided via `GANGLION_APP_ALLOWLIST`:
+unless a human writes a target list: an `appLauncher` entry in `~/.config/miobots-ganglion/config.json`
+(`{"appLauncher":{"allowedTargets":[...]}}`, beside the folders pairing saved), or
+`GANGLION_APP_ALLOWLIST`, which overrides it:
 
 ```bash
 export GANGLION_APP_ALLOWLIST='[{"name":"docs","type":"url","target":"https://docs.miobots.org"},{"name":"calc","type":"app","target":"/usr/bin/gnome-calculator"}]'
@@ -109,7 +111,8 @@ export GANGLION_APP_ALLOWLIST='[{"name":"docs","type":"url","target":"https://do
 In accordance with the **trigger, never compose** rule (`GANGLION_DECISIONS` 21-22), the agent can
 only trigger pre-registered target identifiers. Arbitrary command compose or unlisted URLs are
 strictly rejected. Applications are spawned without shell interpolation (`shell: false`). The tool
-is Action-tier gated and requires explicit human approval.
+is Action-tier gated: it runs only when Brain's call carries an **approval ticket** from a tap on the
+phone, matching this tool and these exact arguments, unexpired and unused (BRAIN_DECISIONS 27).
 
 ## Connection Resilience & Reconnection
 
