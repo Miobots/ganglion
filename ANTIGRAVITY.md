@@ -12,6 +12,7 @@
 4. **Canonical Symlink Resolution:** `file_read(path)` uses `fs.realpathSync()` *before* checking path boundaries against approved folder roots.
 5. **Voice-Never-Approves:** Action-tier desktop tools require manual confirmation via phone/desktop prompt; spoken replies cannot authorize actions.
 6. **Linux Kernel Confinement:** Dedicated low-privilege user (`_mio_ganglion`) scoped with Landlock LSM and seccomp syscall filters (blocking outbound internet sockets).
+7. **Own Token, Folders Fixed at Pairing:** `bun run pair --folder <dir>` shows a six-digit code typed into the app; the daemon then holds its own token (`credentials.json`, mode 0600) and its approved folders (`config.json`). No tool may write either file, so the agent can never widen the folder list (GANGLION_DECISIONS 29).
 
 ---
 
