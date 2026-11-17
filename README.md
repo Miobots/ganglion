@@ -88,3 +88,33 @@ Ganglion's ancestors, and configured `protectedPids` are protected. `SIGTERM` is
 Memory values use bytes: RSS is resident physical memory, virtual memory is address-space size, and
 the percentage is RSS divided by total physical memory. Process inspection does not read process
 environment variables.
+
+## App and URL Launcher
+
+The `open_app_or_url` tool exposes registered application and website launching. It is disabled
+unless an explicit target allowlist is provided via `GANGLION_APP_ALLOWLIST`:
+
+```bash
+export GANGLION_APP_ALLOWLIST='[{"name":"docs","type":"url","target":"https://docs.miobots.org"},{"name":"calc","type":"app","target":"/usr/bin/gnome-calculator"}]'
+```
+
+In accordance with the **trigger, never compose** rule (`GANGLION_DECISIONS` 21-22), the agent can
+only trigger pre-registered target identifiers. Arbitrary command compose or unlisted URLs are
+strictly rejected. Applications are spawned without shell interpolation (`shell: false`). The tool
+is Action-tier gated and requires explicit human approval.
+
+## Connection Resilience & Reconnection
+
+The daemon outbound transport (`BrainWebSocketTransport`) maintains connection liveness via periodic
+`sys.heartbeat` exchanges with Brain. When a connection drops or Brain restarts, Ganglion automatically
+reconnects using jittered exponential backoff (1s to 10s with randomized jitter factor) in accordance
+with `ProtocolDefaults`. The backoff counter resets upon successful `sys.welcome` authentication.
+
+## Security & Path Traversal Testing
+
+Path resolution in `SecureFilesystem` resolves canonical paths via `realpath()` *before* enforcing
+approved directory containment. Automated tests in `tests/security.test.ts` verify refusal of:
+1. Relative path traversal climbing (`../../`).
+2. Plain absolute path escapes outside configured roots (`/etc/passwd`).
+3. Symlinks created inside the approved directory that point out-of-bounds.
+

@@ -9,10 +9,12 @@ import { ProcessCpuSampler } from "./process/process-cpu-sampler.ts";
 import { ProcessInspector } from "./process/process-inspector.ts";
 import { ProcessManager } from "./process/process-manager.ts";
 import type { ProcessManagementConfiguration } from "./process/types.ts";
+import { AppLauncherAdapter, type AppLauncherPolicy } from "./adapters/app-launcher.ts";
 
 export interface GanglionBootstrapOptions extends GanglionMcpServerOptions {
   filesystem?: FilesystemPolicy;
   processManagement?: ProcessManagementConfiguration;
+  appLauncher?: AppLauncherPolicy;
 }
 
 export async function createGanglionMcpServer(
@@ -24,6 +26,9 @@ export async function createGanglionMcpServer(
     new ScreenCaptureAdapter(),
     ...(options.adapters ?? []),
   ];
+  if (options.appLauncher) {
+    adapters.push(new AppLauncherAdapter({ policy: options.appLauncher }));
+  }
   if (options.filesystem) {
     const filesystem = new FilesystemAdapter(options.filesystem);
     await filesystem.initialize();

@@ -23,4 +23,33 @@ describe("BrainWebSocketTransport", () => {
     expect(second.seq).toBe(first.seq + 1);
     expect(second.payload).toMatchObject({ id: "2", result: { content: [{ type: "text", text: "ok" }] } });
   });
+
+  it("schedules reconnection with jittered backoff on disconnect and cancels cleanly on close", async () => {
+    const transport = new BrainWebSocketTransport({
+      url: "ws://unused",
+      deviceId: "ganglion-test",
+      token: "test",
+      autoReconnect: true,
+    });
+    const internals = transport as unknown as {
+      currentBackoffMs: number;
+      reconnectTimer?: ReturnType<typeof setTimeout>;
+      scheduleReconnect: () => void;
+      stopReconnect: () => void;
+      closedManually: boolean;
+    };
+
+    expect(internals.currentBackoffMs).toBe(1000);
+    expect(internals.reconnectTimer).toBeUndefined();
+
+    internals.scheduleReconnect();
+    expect(internals.reconnectTimer).toBeDefined();
+    // Base backoff increases by 1.5x up to max 10000ms
+    expect(internals.currentBackoffMs).toBe(1500);
+
+    // Manual close stops the reconnect timer and marks closedManually
+    await transport.close();
+    expect(internals.reconnectTimer).toBeUndefined();
+    expect(internals.closedManually).toBe(true);
+  });
 });

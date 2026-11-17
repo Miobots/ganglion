@@ -11,6 +11,7 @@ export * from "./mcp/adapters/system-status.ts";
 export * from "./mcp/bootstrap.ts";
 export * from "./mcp/portal.ts";
 export * from "./mcp/adapters/screen-capture.ts";
+export * from "./mcp/adapters/app-launcher.ts";
 export * from "./mcp/process/types.ts";
 export * from "./mcp/process/policy.ts";
 export * from "./mcp/process/process-inspector.ts";
