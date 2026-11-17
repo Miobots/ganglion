@@ -1,3 +1,4 @@
+import { APPROVAL_META_KEY } from "@miobots/protocol";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { InjectedMcpTransport } from "./sdk-transport.ts";
@@ -52,7 +53,7 @@ _meta: {
   ...(tool.metadata ?? {}),
   "miobots/permission": tool.permission,
 },
-    }, async (input: unknown, extra: { signal?: AbortSignal }) => {
+    }, async (input: unknown, extra: { signal?: AbortSignal; _meta?: Record<string, unknown> }) => {
       try {
         const parsed = this.validators.get(tool.name)?.safeParse(input);
         if (!parsed?.success) {
@@ -64,7 +65,7 @@ _meta: {
         const result = await this.registry.execute(
   tool.name,
   parsed.data,
-  { signal: extra.signal },
+  { signal: extra.signal, approval: extra._meta?.[APPROVAL_META_KEY], rawInput: input },
 );
 
 if (this.isImageResult(result)) {

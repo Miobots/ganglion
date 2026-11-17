@@ -12,6 +12,10 @@ export type CapabilityFamily =
 
 export interface ToolContext {
   signal?: AbortSignal;
+  /** The approval ticket Brain sent in `params._meta` (BRAIN_DECISIONS 27); checked, never trusted blindly. */
+  approval?: unknown;
+  /** The arguments exactly as received, which the ticket's hash must match. */
+  rawInput?: unknown;
 }
 
 export type ToolSchema =
