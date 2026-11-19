@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promi
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { FilesystemPolicy } from "./mcp/types.ts";
+import type { AppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
 
 /**
  * Where a paired daemon keeps what pairing gave it (G0.2, G0.3).
@@ -18,6 +19,8 @@ export interface Credentials {
 
 export interface PairedConfig {
   filesystem?: FilesystemPolicy;
+  /** The apps and sites `open_app_or_url` may open, written by a human (G2.1). */
+  appLauncher?: AppLauncherPolicy;
 }
 
 export function configDir(): string {
