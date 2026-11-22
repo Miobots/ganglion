@@ -31,6 +31,8 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
         working-directory: miobots-ganglion
+      # The screenshot tool shrinks captures with ffmpeg at runtime (GANGLION_DECISIONS 33); test it for real.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: bun test
         working-directory: miobots-ganglion
       - run: bun run typecheck
