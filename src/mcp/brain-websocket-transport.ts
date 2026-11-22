@@ -53,7 +53,14 @@ export class BrainWebSocketTransport implements GanglionTransport {
   async start(): Promise<void> {
     if (this.started) return;
     this.closedManually = false;
-    await this.connect();
+    try {
+      await this.connect();
+    } catch (error) {
+      // Brain being down or refusing us must never kill the daemon: say why, and keep retrying.
+      // The socket's close handler has already scheduled the reconnect.
+      if (this.options.autoReconnect === false) throw error;
+      console.error(`[Ganglion] Could not connect to Brain: ${describeError(error)}. Retrying in the background.`);
+    }
   }
 
   private connect(): Promise<void> {
@@ -360,13 +367,10 @@ export class BrainWebSocketTransport implements GanglionTransport {
       try {
         await this.connect();
       } catch (error) {
-        console.log(`[Ganglion] Reconnection attempt failed: ${error instanceof Error ? error.message : String(error)}`);
+        console.log(`[Ganglion] Reconnection attempt failed: ${describeError(error)}`);
       }
     }, delayMs);
 
-    if (this.reconnectTimer.unref) {
-      this.reconnectTimer.unref();
-    }
   }
 
   private stopReconnect(): void {
@@ -375,4 +379,11 @@ export class BrainWebSocketTransport implements GanglionTransport {
       this.reconnectTimer = undefined;
     }
   }
+}
+
+/** Bun's WebSocket reports failures as an ErrorEvent, not an Error, and String() of it is useless. */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === "string" && message ? message : String(error);
 }
