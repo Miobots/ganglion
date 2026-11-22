@@ -114,6 +114,26 @@ strictly rejected. Applications are spawned without shell interpolation (`shell:
 is Action-tier gated: it runs only when Brain's call carries an **approval ticket** from a tap on the
 phone, matching this tool and these exact arguments, unexpired and unused (BRAIN_DECISIONS 27).
 
+## Registered scripts (`run_script`)
+
+`run_script` triggers a script a human registered, by id. It never builds or accepts a command: its
+only argument is an id from the list, and the program and its arguments come from the registration.
+Write the list into `config.json` (re-pairing keeps it), or set `GANGLION_SCRIPTS` to override it:
+
+```json
+{ "scripts": [{ "id": "backup-photos", "path": "/home/me/bin/backup-photos.sh", "args": ["--quiet"], "description": "copies Photos to the NAS" }] }
+```
+
+Ids are lowercase letters, digits, `-` and `_`; paths must be absolute. Scripts run without a shell,
+for at most 60 s, and the last 4 KB of output comes back. Action tier: each run needs a tap on the
+phone (`GANGLION_DECISIONS` 32).
+
+## Media control (`media_control`)
+
+Play, pause, next, previous, volume up/down by 5% and mute, on Linux, with nothing to install:
+players are driven over MPRIS with `gdbus`, volume through PipeWire with `wpctl`. It acts on the
+player that is playing. Read tier, so no tap is needed.
+
 ## Connection Resilience & Reconnection
 
 The daemon outbound transport (`BrainWebSocketTransport`) maintains connection liveness via periodic

@@ -65,8 +65,9 @@ until now, which is the drift `DECISIONS_PENDING.md` predicted when decision 21 
 
 The daemon dials out to Brain over `BrainWebSocketTransport` and serves MCP over it. The official
 MCP SDK owns the MCP lifecycle; Ganglion owns registration, local permissions, and the adapters:
-system status (battery, CPU load, memory, disk), approved-directory filesystem, app launcher, opt-in
-process management, and screen capture. Ganglion still does not open a listener or communicate
+system status (battery, CPU load, memory, disk), approved-directory filesystem, app launcher,
+media control (MPRIS and PipeWire, Read tier), registered scripts (`run_script`, Action tier),
+opt-in process management, and screen capture. Ganglion still does not open a listener or communicate
 directly with Heart or Synapse.
 
 Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26), which runs
@@ -86,6 +87,10 @@ refused, never passed on to another approver.
 detaches its server on `onclose` for good, so a reconnecting drop must not report it. The daemon
 keeps no audit chain and does nothing for the kill switch: Brain records the rows and refuses the
 connection.
+
+**`run_script` takes an id and nothing else** (GANGLION_DECISIONS 32). Its schema is an enum of
+registered ids; the program and arguments come from the human's `config.json`. Never add a field
+that carries a command, a path or extra arguments. `media_control` is Read tier, from a fixed list.
 
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.
