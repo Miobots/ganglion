@@ -14,6 +14,7 @@
 6. **Linux Kernel Confinement:** Dedicated low-privilege user (`_mio_ganglion`) scoped with Landlock LSM and seccomp syscall filters (blocking outbound internet sockets).
 7. **Own Token, Folders Fixed at Pairing:** `bun run pair --folder <dir>` shows a six-digit code typed into the app; the daemon then holds its own token (`credentials.json`, mode 0600) and its approved folders (`config.json`). No tool may write either file, so the agent can never widen the folder list (GANGLION_DECISIONS 29).
 8. **Actions Need a Ticket:** An Action-tier tool runs only when the MCP call's `_meta` carries Brain's approval ticket matching this tool and the exact arguments, unexpired and unused; an invalid ticket is refused outright (GANGLION_DECISIONS 30).
+9. **Reconnects Keep the Session:** only a close that will not be retried may call `onclose`, because the MCP SDK detaches for good on it. No local audit chain and no kill switch logic here: Brain does both (GANGLION_DECISIONS 31).
 
 ---
 

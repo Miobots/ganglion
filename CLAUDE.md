@@ -82,6 +82,11 @@ of the agent's reach.
 tool, a SHA-256 of the exact arguments as received, unexpired, and used once. An invalid ticket is
 refused, never passed on to another approver.
 
+**Only a close that won't be retried ends the MCP session** (GANGLION_DECISIONS 31). The SDK
+detaches its server on `onclose` for good, so a reconnecting drop must not report it. The daemon
+keeps no audit chain and does nothing for the kill switch: Brain records the rows and refuses the
+connection.
+
 One exception: the permission round-trip pairs with the app's approval surface, and those two
 unblock each other.
 
