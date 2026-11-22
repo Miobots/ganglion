@@ -70,8 +70,8 @@ media control (MPRIS and PipeWire, Read tier), registered scripts (`run_script`,
 opt-in process management, and screen capture. Ganglion still does not open a listener or communicate
 directly with Heart or Synapse.
 
-Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26), which runs
-read-tier tools only until `G2.3` brings an approval surface.
+Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26). Read-tier
+tools run directly; Action-tier tools wait for a tap on the phone (BRAIN_DECISIONS 27).
 
 **A daemon connects only with its own paired token** (GANGLION_DECISIONS 29). `bun run pair
 --folder <dir>` shows a six-digit code, a human types it into the app, and the token lands in
@@ -92,8 +92,8 @@ connection.
 registered ids; the program and arguments come from the human's `config.json`. Never add a field
 that carries a command, a path or extra arguments. `media_control` is Read tier, from a fixed list.
 
-One exception: the permission round-trip pairs with the app's approval surface, and those two
-unblock each other.
+**Not built yet:** the kernel confinement below (`G5.1`–`G5.3`; the daemon runs as the logged-in
+user) and a desktop approval surface (`G6.1`).
 
 ## Platform reality
 
