@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { FilesystemPolicy } from "./mcp/types.ts";
 import type { AppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
+import type { RegisteredScript } from "./mcp/adapters/script-runner.ts";
 
 /**
  * Where a paired daemon keeps what pairing gave it (G0.2, G0.3).
@@ -21,6 +22,8 @@ export interface PairedConfig {
   filesystem?: FilesystemPolicy;
   /** The apps and sites `open_app_or_url` may open, written by a human (G2.1). */
   appLauncher?: AppLauncherPolicy;
+  /** The scripts `run_script` may trigger, by id, written by a human (G2.2). */
+  scripts?: RegisteredScript[];
 }
 
 export function configDir(): string {

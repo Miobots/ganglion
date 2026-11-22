@@ -10,11 +10,15 @@ import { ProcessInspector } from "./process/process-inspector.ts";
 import { ProcessManager } from "./process/process-manager.ts";
 import type { ProcessManagementConfiguration } from "./process/types.ts";
 import { AppLauncherAdapter, type AppLauncherPolicy } from "./adapters/app-launcher.ts";
+import { MediaControlAdapter } from "./adapters/media-control.ts";
+import { ScriptRunnerAdapter, type RegisteredScript } from "./adapters/script-runner.ts";
 
 export interface GanglionBootstrapOptions extends GanglionMcpServerOptions {
   filesystem?: FilesystemPolicy;
   processManagement?: ProcessManagementConfiguration;
   appLauncher?: AppLauncherPolicy;
+  /** Scripts a human registered for `run_script` (G2.2). */
+  scripts?: RegisteredScript[];
 }
 
 export async function createGanglionMcpServer(
@@ -24,8 +28,10 @@ export async function createGanglionMcpServer(
   const adapters = [
     new SystemStatusAdapter(),
     new ScreenCaptureAdapter(),
+    new MediaControlAdapter(),
     ...(options.adapters ?? []),
   ];
+  if (options.scripts?.length) adapters.push(new ScriptRunnerAdapter(options.scripts));
   if (options.appLauncher) {
     adapters.push(new AppLauncherAdapter({ policy: options.appLauncher }));
   }

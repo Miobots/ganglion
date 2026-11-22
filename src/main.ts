@@ -4,6 +4,7 @@ import { BrainWebSocketTransport } from "./mcp/brain-websocket-transport.ts";
 import { parseFilesystemPolicy } from "./mcp/filesystem/policy.ts";
 import { parseProcessManagementConfiguration } from "./mcp/process/policy.ts";
 import { parseAppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
+import { parseScripts } from "./mcp/adapters/script-runner.ts";
 import { readCredentials, readPairedConfig } from "./pairing.ts";
 import { createGanglionDevApprovalProvider, parseGanglionDevAutoApproveProcessActions } from "./mcp/dev-approval.ts";
 
@@ -20,6 +21,7 @@ const processManagement = parseProcessManagementConfiguration(process.env.GANGLI
 const appLauncher = parseAppLauncherPolicy(
   process.env.GANGLION_APP_ALLOWLIST ?? (paired?.appLauncher ? JSON.stringify(paired.appLauncher) : undefined),
 );
+const scripts = parseScripts(process.env.GANGLION_SCRIPTS ?? (paired?.scripts ? JSON.stringify(paired.scripts) : undefined));
 const allowFilesystemActions = process.env.MCP_DEV_ALLOW_FILESYSTEM_ACTIONS === "true";
 const allowProcessActions = parseGanglionDevAutoApproveProcessActions();
 
@@ -38,6 +40,7 @@ const mcpServer = await createGanglionMcpServer(transport, {
   ...(filesystem ? { filesystem } : {}),
   ...(processManagement ? { processManagement } : {}),
   ...(appLauncher ? { appLauncher } : {}),
+  ...(scripts ? { scripts } : {}),
   ...(allowFilesystemActions || allowProcessActions ? {
     approvalProvider: createGanglionDevApprovalProvider({ allowFilesystemActions, allowProcessActions }),
   } : {}),
