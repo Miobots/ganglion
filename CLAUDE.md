@@ -113,9 +113,10 @@ is assumed. CPU percentage is per-core and may exceed 100%. Memory is reported i
 separate from virtual memory. The `confined_process` capability name does not provide kernel or OS
 confinement.
 
-**Screen capture on Wayland goes through `xdg-desktop-portal` and the compositor shows its own
-consent prompt.** Whether a persistent token survives across sessions is unverified and decides
-whether this tool is usable as designed. Check that before building around it.
+**Screen capture on Wayland goes through `xdg-desktop-portal`, and GNOME asks once and remembers**
+(GANGLION_DECISIONS 33, verified within a session; a post-reboot check is owed). The capture is
+shrunk to a JPEG of at most 44 KB so it fits one protocol message, and GNOME's saved copy in
+`~/Pictures` is deleted at once. Never offer the agent the interactive picker.
 
 ## Where the design lives
 

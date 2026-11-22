@@ -16,6 +16,7 @@
 8. **Actions Need a Ticket:** An Action-tier tool runs only when the MCP call's `_meta` carries Brain's approval ticket matching this tool and the exact arguments, unexpired and unused; an invalid ticket is refused outright (GANGLION_DECISIONS 30).
 9. **Reconnects Keep the Session:** only a close that will not be retried may call `onclose`, because the MCP SDK detaches for good on it. No local audit chain and no kill switch logic here: Brain does both (GANGLION_DECISIONS 31).
 10. **Scripts by Id Only:** `run_script`'s only argument is an id from the registered enum; program and arguments come from the human's `config.json`. Never add a field carrying a command, path or argument. `media_control` is Read tier from a fixed list (GANGLION_DECISIONS 32).
+11. **Screenshots Leave Nothing Behind:** capture through the Screenshot portal non-interactively, delete GNOME's saved copy at once, and shrink to a JPEG of at most 44 KB so it fits one message (GANGLION_DECISIONS 33).
 
 ---
 
