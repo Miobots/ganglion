@@ -1,6 +1,6 @@
 
 import { MessageBus, Variant, sessionBus } from "dbus-next";
-import { readFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const PORTAL_DESTINATION = "org.freedesktop.portal.Desktop";
@@ -74,7 +74,8 @@ if (typeof uri !== "string" || !uri.startsWith("file://")) {
   throw new Error("Screenshot portal returned an invalid file URI");
 }
       const filePath = fileURLToPath(uri);
-      const bytes = await readFile(filePath);
+      // GNOME saves every portal screenshot into ~/Pictures; a capture must not leave a copy behind.
+      const bytes = await readFile(filePath).finally(() => unlink(filePath).catch(() => undefined));
 
       if (bytes.length === 0) {
         throw new Error("Screenshot portal returned an empty image");
