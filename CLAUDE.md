@@ -65,8 +65,9 @@ until now, which is the drift `DECISIONS_PENDING.md` predicted when decision 21 
 
 The daemon dials out to Brain over `BrainWebSocketTransport` and serves MCP over it. The official
 MCP SDK owns the MCP lifecycle; Ganglion owns registration, local permissions, and the adapters:
-system status (battery, CPU load, memory, disk), approved-directory filesystem, app launcher, opt-in
-process management, and screen capture. Ganglion still does not open a listener or communicate
+system status (battery, CPU load, memory, disk), approved-directory filesystem, app launcher,
+media control (MPRIS and PipeWire, Read tier), registered scripts (`run_script`, Action tier),
+opt-in process management, and screen capture. Ganglion still does not open a listener or communicate
 directly with Heart or Synapse.
 
 Brain's main agent reaches this daemon only through `ask_laptop` (BRAIN_DECISIONS 26). Read-tier
@@ -82,8 +83,17 @@ of the agent's reach.
 tool, a SHA-256 of the exact arguments as received, unexpired, and used once. An invalid ticket is
 refused, never passed on to another approver.
 
+**Only a close that won't be retried ends the MCP session** (GANGLION_DECISIONS 31). The SDK
+detaches its server on `onclose` for good, so a reconnecting drop must not report it. The daemon
+keeps no audit chain and does nothing for the kill switch: Brain records the rows and refuses the
+connection.
+
+**`run_script` takes an id and nothing else** (GANGLION_DECISIONS 32). Its schema is an enum of
+registered ids; the program and arguments come from the human's `config.json`. Never add a field
+that carries a command, a path or extra arguments. `media_control` is Read tier, from a fixed list.
+
 **Not built yet:** the kernel confinement below (`G5.1`–`G5.3`; the daemon runs as the logged-in
-user), Ganglion actions in Brain's audit chain (`G3.1`), and a desktop approval surface (`G6.1`).
+user) and a desktop approval surface (`G6.1`).
 
 ## Platform reality
 
@@ -103,9 +113,10 @@ is assumed. CPU percentage is per-core and may exceed 100%. Memory is reported i
 separate from virtual memory. The `confined_process` capability name does not provide kernel or OS
 confinement.
 
-**Screen capture on Wayland goes through `xdg-desktop-portal` and the compositor shows its own
-consent prompt.** Whether a persistent token survives across sessions is unverified and decides
-whether this tool is usable as designed. Check that before building around it.
+**Screen capture on Wayland goes through `xdg-desktop-portal`, and GNOME asks once and remembers**
+(GANGLION_DECISIONS 33, verified within a session; a post-reboot check is owed). The capture is
+shrunk to a JPEG of at most 44 KB so it fits one protocol message, and GNOME's saved copy in
+`~/Pictures` is deleted at once. Never offer the agent the interactive picker.
 
 ## Where the design lives
 

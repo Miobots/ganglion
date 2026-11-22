@@ -3,7 +3,7 @@ import { hostname } from "node:os";
 import { parseArgs } from "node:util";
 import WebSocket from "ws";
 import { decode, encode, Kind, newEnvelope, ProtocolDefaults, SequenceCounter, Topics, type AckPayload } from "@miobots/protocol";
-import { approvedFolders, configDir, savePairing } from "./pairing.ts";
+import { approvedFolders, configDir, readPairedConfig, savePairing } from "./pairing.ts";
 
 /**
  * `bun run pair --folder ~/Documents/Mio` — pair this laptop with Brain (G0.2, G0.3).
@@ -53,7 +53,9 @@ if (!ack.accepted || !ack.token) {
   process.exit(1);
 }
 
-await savePairing({ brain_url: brainUrl, device_id: deviceId, token: ack.token }, filesystem ? { filesystem } : {});
+// Re-pairing replaces the token and the folders, and keeps the apps and scripts a human registered.
+const { filesystem: _old, ...kept } = (await readPairedConfig()) ?? {};
+await savePairing({ brain_url: brainUrl, device_id: deviceId, token: ack.token }, { ...kept, ...(filesystem ? { filesystem } : {}) });
 console.log(`Paired as "${ack.name ?? name}". Saved to ${configDir()}.`);
 console.log(filesystem
   ? `Approved folders (read-only): ${filesystem.approvedDirectories.map((d) => d.path).join(", ")}`

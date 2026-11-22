@@ -79,3 +79,45 @@ describe("BrainWebSocketTransport when Brain refuses it", () => {
     server.close();
   });
 });
+
+describe("BrainWebSocketTransport across a Brain restart", () => {
+  it("keeps the MCP server answering after the socket drops and reconnects", async () => {
+    const { WebSocketServer } = await import("ws");
+    const { createWelcomeAck, encode: enc, Kind, newEnvelope, parse: parseEnvelope, SequenceCounter } = await import("@miobots/protocol");
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+
+    let connections = 0;
+    const answers: unknown[] = [];
+    const server = new WebSocketServer({ port: 0 });
+    const port = (server.address() as { port: number }).port;
+    server.on("connection", (socket) => {
+      const attempt = ++connections;
+      const seq = new SequenceCounter();
+      socket.on("message", (data) => {
+        const envelope = parseEnvelope(data.toString());
+        if (!envelope.success) return;
+        if (envelope.data.topic === Topics.SYS_HELLO) {
+          socket.send(enc(createWelcomeAck(envelope.data, { accepted: true, seq: seq.next() })));
+          // The first Brain "restarts" right after welcoming us; the second one asks for initialize.
+          if (attempt === 1) setTimeout(() => socket.close(), 20);
+          else socket.send(enc(newEnvelope({
+            kind: Kind.CMD, topic: Topics.MCP_REQUEST, seq, idem_key: "init-2",
+            payload: { jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "brain", version: "1" } } } as never,
+          })));
+        }
+        if (envelope.data.topic === Topics.MCP_RESPONSE) answers.push(envelope.data.payload);
+      });
+    });
+
+    const transport = new BrainWebSocketTransport({ url: `ws://127.0.0.1:${port}`, deviceId: "ganglion-test", token: "test" });
+    const mcp = new McpServer({ name: "ganglion-test", version: "1" });
+    await mcp.connect(transport);
+
+    for (let i = 0; i < 300 && answers.length === 0; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(connections).toBeGreaterThanOrEqual(2);
+    expect(answers[0]).toMatchObject({ id: 0, result: { serverInfo: { name: "ganglion-test" } } });
+
+    await transport.close();
+    server.close();
+  }, 15_000);
+});

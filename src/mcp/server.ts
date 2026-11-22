@@ -5,6 +5,7 @@ import { InjectedMcpTransport } from "./sdk-transport.ts";
 import { DefaultToolRegistry } from "./registry.ts";
 import { DefaultPermissionManager } from "./permissions.ts";
 import type { ApprovalProvider, CapabilityAdapter, GanglionTransport, RegisteredTool, ToolSchema } from "./types.ts";
+import { MAX_WIRE_IMAGE_BYTES } from "./adapters/screen-capture.ts";
 
 export interface GanglionMcpServerOptions {
   name?: string;
@@ -69,10 +70,8 @@ _meta: {
 );
 
 if (this.isImageResult(result)) {
-  // Base64 expands image data by approximately 4/3.
-  // Keep a conservative limit because Protocol envelopes
-  // have a 64 KB maximum message size.
-  const MAX_INLINE_IMAGE_BYTES = 350 * 1024;
+  // Base64 expands image data by about 4/3, and a protocol envelope is at most 64 KB.
+  const MAX_INLINE_IMAGE_BYTES = MAX_WIRE_IMAGE_BYTES;
 
   if (result.sizeBytes > MAX_INLINE_IMAGE_BYTES) {
     return {

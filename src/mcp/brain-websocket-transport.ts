@@ -129,8 +129,12 @@ export class BrainWebSocketTransport implements GanglionTransport {
         this.stopHeartbeat();
         this.pendingCorrelations.clear();
         this.started = false;
-        this.onclose?.();
         console.log("[Ganglion] Brain connection closed");
+        // Only a close that will not be retried ends the MCP session. The SDK detaches its server on
+        // onclose for good, so reporting a drop we are about to reconnect from left the daemon
+        // connected but unable to answer, and Brain's next initialize timed out.
+        const reconnecting = !this.closedManually && (this.options.autoReconnect ?? true);
+        if (!reconnecting) this.onclose?.();
 
         if (this.startup) {
           this.startup.reject(new Error("Connection closed before authentication"));
