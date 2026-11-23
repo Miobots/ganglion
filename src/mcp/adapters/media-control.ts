@@ -40,15 +40,31 @@ const INPUT_SCHEMA: ToolSchema = {
 
 const SINK = "@DEFAULT_AUDIO_SINK@";
 
+export type VolumeCommand = "volume_up" | "volume_down" | "mute_toggle";
+export const VOLUME_COMMANDS: readonly VolumeCommand[] = ["volume_up", "volume_down", "mute_toggle"];
+
+/** The fixed wpctl arguments for each volume command; the only ones ever run. */
+export function volumeArgs(command: VolumeCommand): string[] {
+  return command === "volume_up" ? ["set-volume", "-l", "1.0", SINK, "5%+"]
+    : command === "volume_down" ? ["set-volume", SINK, "5%-"]
+    : ["set-mute", SINK, "toggle"];
+}
+
 export class MediaControlAdapter implements CapabilityAdapter {
   readonly family = "media_control" as const;
 
   private readonly run: Run;
   private readonly platform: NodeJS.Platform;
+  private readonly setVolume: ((command: VolumeCommand) => Promise<void>) | undefined;
 
-  constructor(run: Run = defaultRun, platform: NodeJS.Platform = process.platform) {
+  /**
+   * `setVolume` replaces running wpctl here. Inside the jail the PipeWire socket is not mounted (it
+   * would also let the daemon record the microphone), so the broker outside changes the volume.
+   */
+  constructor(run: Run = defaultRun, platform: NodeJS.Platform = process.platform, setVolume?: (command: VolumeCommand) => Promise<void>) {
     this.run = run;
     this.platform = platform;
+    this.setVolume = setVolume;
   }
 
   isAvailable(): boolean {
@@ -75,10 +91,11 @@ export class MediaControlAdapter implements CapabilityAdapter {
       await this.run("gdbus", ["call", "--session", "--dest", player, "--object-path", "/org/mpris/MediaPlayer2", "--method", `org.mpris.MediaPlayer2.Player.${method}`]);
       return { status: "done", command, player: player.replace("org.mpris.MediaPlayer2.", "") };
     }
-    const volumeArgs = command === "volume_up" ? ["set-volume", "-l", "1.0", SINK, "5%+"]
-      : command === "volume_down" ? ["set-volume", SINK, "5%-"]
-      : ["set-mute", SINK, "toggle"];
-    await this.run("wpctl", volumeArgs);
+    if (this.setVolume) {
+      await this.setVolume(command as VolumeCommand);
+      return { status: "done", command };
+    }
+    await this.run("wpctl", volumeArgs(command as VolumeCommand));
     const volume = (await this.run("wpctl", ["get-volume", SINK])).trim(); // "Volume: 0.30 [MUTED]"
     return { status: "done", command, volume };
   }
