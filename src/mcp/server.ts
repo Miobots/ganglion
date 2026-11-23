@@ -13,6 +13,8 @@ export interface GanglionMcpServerOptions {
   approvalProvider?: ApprovalProvider;
   tools?: RegisteredTool[];
   adapters?: CapabilityAdapter[];
+  /** A human's per-tool overrides (G6.1); applied before the tool is registered or advertised. */
+  tiers?: Record<string, "read" | "action">;
 }
 
 export class GanglionMcpServer {
@@ -24,6 +26,7 @@ export class GanglionMcpServer {
   private readonly startedAdapters: CapabilityAdapter[] = [];
   private started = false;
   private closed = false;
+  private readonly tiers: Record<string, "read" | "action">;
 
   constructor(transport: GanglionTransport, options: GanglionMcpServerOptions = {}) {
     this.server = new McpServer({
@@ -33,6 +36,7 @@ export class GanglionMcpServer {
       maxToolInputElements: 256,
     });
     this.registry = new DefaultToolRegistry(new DefaultPermissionManager(options.approvalProvider));
+    this.tiers = options.tiers ?? {};
     for (const tool of options.tools ?? []) this.register(tool);
     for (const adapter of options.adapters ?? []) {
       if (!adapter.isAvailable()) continue;
@@ -42,7 +46,12 @@ export class GanglionMcpServer {
     this.transport = new InjectedMcpTransport(transport);
   }
 
-  register(tool: RegisteredTool): void {
+  register(original: RegisteredTool): void {
+    const override = this.tiers[original.name];
+    const tool = override && override !== original.permission
+      ? { ...original, permission: override, metadata: { ...(original.metadata ?? {}), "miobots/default_permission": original.permission } }
+      : original;
+    if (tool !== original) console.log(`[Ganglion] ${tool.name}: ${original.permission} → ${tool.permission} (set by a human in config.json)`);
     this.registry.register(tool);
     if (!tool.enabled) return;
     const validator = this.zodInputSchema(tool.inputSchema);

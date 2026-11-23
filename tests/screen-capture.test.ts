@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { fitForWire, MAX_WIRE_IMAGE_BYTES, ScreenCaptureAdapter } from "../src/mcp/adapters/screen-capture.ts";
 import { encode, Kind, newEnvelope, SequenceCounter, Topics } from "@miobots/protocol";
 
@@ -27,10 +28,15 @@ describe("screen capture (G4.1)", () => {
     expect(() => encode(envelope)).not.toThrow();
   });
 
-  it("is a Read tool with no arguments that returns a JPEG", async () => {
-    const tool = new ScreenCaptureAdapter({ capture: async () => ({ bytes: Buffer.from("png") }), shrink: async () => Buffer.from([0xff, 0xd8, 0xff, 1]) }).tools()[0]!;
+  it("is a Read tool that returns a JPEG, and crops to a fixed area on request", async () => {
+    const crops: (string | undefined)[] = [];
+    const tool = new ScreenCaptureAdapter({ capture: async () => ({ bytes: Buffer.from("png") }), shrink: async (_i, _w, _q, crop) => { crops.push(crop); return Buffer.from([0xff, 0xd8, 0xff, 1]); } }).tools()[0]!;
     expect(tool.permission).toBe("read");
-    expect(tool.inputSchema).toMatchObject({ properties: {}, additionalProperties: false });
+    expect(tool.inputSchema).toMatchObject({ additionalProperties: false, properties: { area: { enum: expect.arrayContaining(["whole", "top_left", "center"]) } } });
+    await tool.handler({ area: "top_left" }, {});
+    expect(crops).toEqual(["crop=iw/2:ih/2:0:0"]);
+    await expect(tool.handler({ area: "crop=iw:ih:0:0,drawtext" }, {})).rejects.toThrow("area must be one of");
+    crops.length = 0;
     expect(await tool.handler({}, {})).toEqual({ type: "image", mimeType: "image/jpeg", data: Buffer.from([0xff, 0xd8, 0xff, 1]).toString("base64"), sizeBytes: 4 });
   });
 
@@ -39,5 +45,8 @@ describe("screen capture (G4.1)", () => {
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
     const { bytes } = await fitForWire(png);
     expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+    // A 4×2 image cropped to its top-left quarter is 2×1.
+    const wide = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=red:size=4x2", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"]).stdout;
+    expect((await fitForWire(wide, undefined, "crop=iw/2:ih/2:0:0")).bytes.length).toBeGreaterThan(0);
   });
 });

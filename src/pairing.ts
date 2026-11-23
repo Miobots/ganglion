@@ -24,6 +24,26 @@ export interface PairedConfig {
   appLauncher?: AppLauncherPolicy;
   /** The scripts `run_script` may trigger, by id, written by a human (G2.2). */
   scripts?: RegisteredScript[];
+  /** Also ask for approvals on this laptop's desktop (G2.3). Off unless a human turns it on. */
+  desktopApprovals?: boolean;
+  /** Per-tool tier overrides a human set (G6.1); see `src/tiers.ts`. */
+  tiers?: Record<string, "read" | "action">;
+  /** MCP servers a human added (G6.2); their tools start at the strictest tier. */
+  connectors?: ConnectorConfig[];
+}
+
+export interface ConnectorConfig {
+  /** Prefix for its tools, e.g. "notes" → "notes.search". */
+  name: string;
+  /** Program that speaks MCP on stdin/stdout, and its fixed arguments. */
+  command: string;
+  args?: string[];
+}
+
+/** Writes `config.json` alone, for the settings window. Credentials are never touched. */
+export async function savePairedConfig(config: PairedConfig, dir = configDir()): Promise<void> {
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await writeFile(join(dir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o644 });
 }
 
 export function configDir(): string {

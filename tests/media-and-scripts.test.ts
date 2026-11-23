@@ -60,7 +60,9 @@ describe("run_script — trigger, never compose (G2.2)", () => {
 
   it("runs the registered program with the registered arguments, without a shell", async () => {
     const result = await new ScriptRunnerAdapter(scripts).tools()[0]!.handler({ id: "hello" }, {});
-    expect(result).toEqual({ status: "failed", id: "hello", exit_code: 3, output: "hello mio\noops", timed_out: false });
+    expect(result).toMatchObject({ status: "failed", id: "hello", exit_code: 3, timed_out: false });
+    // stdout and stderr are two pipes, so their lines can arrive in either order.
+    expect(String((result as { output: string }).output).split("\n").sort()).toEqual(["hello mio", "oops"]);
   });
 
   it("throws on a command string, or on extra arguments, and never runs anything", async () => {

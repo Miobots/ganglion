@@ -5,6 +5,7 @@ import {
   createAck,
   DeviceRole,
   encode,
+  isApprovalPayload,
   Kind,
   newEnvelope,
   parse,
@@ -16,12 +17,15 @@ import {
   Topics,
 } from "@miobots/protocol";
 import type { GanglionTransport } from "./types.ts";
+import type { ApprovalSurface } from "./desktop-approval.ts";
 
 export interface BrainTransportOptions {
   url: string;
   deviceId: string;
   token: string;
   autoReconnect?: boolean;
+  /** Offer this laptop as an approval surface (G2.3); Brain then asks it alongside the phone. */
+  approvalSurface?: ApprovalSurface;
 }
 
 type StartupCallbacks = {
@@ -91,6 +95,7 @@ export class BrainWebSocketTransport implements GanglionTransport {
             token: this.options.token,
             protocol_version: ProtocolDefaults.PROTOCOL_VERSION,
             role: DeviceRole.GANGLION,
+            ...(this.options.approvalSurface ? { capabilities: ["desktop-approval"] } : {}),
           },
         });
 
@@ -299,6 +304,18 @@ export class BrainWebSocketTransport implements GanglionTransport {
       this.pendingCorrelations.set(String(message.id), envelope.corr_id);
       this.acknowledge(envelope);
       this.onmessage?.(message);
+      return;
+    }
+
+    // Brain asks for a human's answer (G2.3). The ACK is the click, sent on the connection the
+    // request arrived on; no answer means no ACK, and Brain counts that as unanswered.
+    if (envelope.kind === Kind.CMD && envelope.topic === Topics.SYS_APPROVAL && this.options.approvalSurface) {
+      const socket = this.socket;
+      if (!isApprovalPayload(envelope.payload)) return;
+      void this.options.approvalSurface(envelope.payload).then((answer) => {
+        if (answer === undefined || socket !== this.socket || socket?.readyState !== WebSocket.OPEN) return;
+        socket.send(encode(createAck(envelope, answer ? { accepted: true } : { accepted: false, reason: "Rejected on the laptop." }, this.sequence)));
+      }, (error: unknown) => console.warn(`[Ganglion] Desktop approval failed: ${describeError(error)}`));
       return;
     }
 
