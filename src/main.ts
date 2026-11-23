@@ -5,6 +5,9 @@ import { parseFilesystemPolicy } from "./mcp/filesystem/policy.ts";
 import { parseProcessManagementConfiguration } from "./mcp/process/policy.ts";
 import { parseAppLauncherPolicy } from "./mcp/adapters/app-launcher.ts";
 import { parseScripts } from "./mcp/adapters/script-runner.ts";
+import { createDesktopApprovalSurface } from "./mcp/desktop-approval.ts";
+import { parseTiers } from "./tiers.ts";
+import { parseConnectors } from "./mcp/adapters/connectors.ts";
 import { readCredentials, readPairedConfig } from "./pairing.ts";
 import { createGanglionDevApprovalProvider, parseGanglionDevAutoApproveProcessActions } from "./mcp/dev-approval.ts";
 
@@ -30,10 +33,13 @@ if (!deviceId || !token) {
   process.exit(1);
 }
 
+const desktopApprovals = (process.env.GANGLION_DESKTOP_APPROVALS ?? String(paired?.desktopApprovals ?? false)) === "true";
+
 const transport = new BrainWebSocketTransport({
   url: brainUrl,
   deviceId,
   token,
+  ...(desktopApprovals ? { approvalSurface: createDesktopApprovalSurface() } : {}),
 });
 
 const mcpServer = await createGanglionMcpServer(transport, {
@@ -41,6 +47,8 @@ const mcpServer = await createGanglionMcpServer(transport, {
   ...(processManagement ? { processManagement } : {}),
   ...(appLauncher ? { appLauncher } : {}),
   ...(scripts ? { scripts } : {}),
+  ...(paired?.tiers ? { tiers: parseTiers(paired.tiers) } : {}),
+  ...(paired?.connectors ? { connectors: parseConnectors(paired.connectors) } : {}),
   ...(allowFilesystemActions || allowProcessActions ? {
     approvalProvider: createGanglionDevApprovalProvider({ allowFilesystemActions, allowProcessActions }),
   } : {}),

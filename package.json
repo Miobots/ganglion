@@ -10,6 +10,7 @@
   "scripts": {
     "start": "bun run src/main.ts",
     "pair": "bun run src/pair.ts",
+    "settings": "bun run src/settings.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

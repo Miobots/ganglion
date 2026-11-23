@@ -12,6 +12,8 @@ import type { ProcessManagementConfiguration } from "./process/types.ts";
 import { AppLauncherAdapter, type AppLauncherPolicy } from "./adapters/app-launcher.ts";
 import { MediaControlAdapter } from "./adapters/media-control.ts";
 import { ScriptRunnerAdapter, type RegisteredScript } from "./adapters/script-runner.ts";
+import { ConnectorAdapter } from "./adapters/connectors.ts";
+import type { ConnectorConfig } from "../pairing.ts";
 
 export interface GanglionBootstrapOptions extends GanglionMcpServerOptions {
   filesystem?: FilesystemPolicy;
@@ -19,6 +21,8 @@ export interface GanglionBootstrapOptions extends GanglionMcpServerOptions {
   appLauncher?: AppLauncherPolicy;
   /** Scripts a human registered for `run_script` (G2.2). */
   scripts?: RegisteredScript[];
+  /** MCP servers a human added (G6.2). One that fails to start is skipped, never fatal. */
+  connectors?: ConnectorConfig[];
 }
 
 export async function createGanglionMcpServer(
@@ -32,6 +36,13 @@ export async function createGanglionMcpServer(
     ...(options.adapters ?? []),
   ];
   if (options.scripts?.length) adapters.push(new ScriptRunnerAdapter(options.scripts));
+  for (const connector of options.connectors ?? []) {
+    try {
+      adapters.push(await ConnectorAdapter.connect(connector));
+    } catch (error) {
+      console.warn(`[Ganglion] Connector ${connector.name} did not start: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   if (options.appLauncher) {
     adapters.push(new AppLauncherAdapter({ policy: options.appLauncher }));
   }

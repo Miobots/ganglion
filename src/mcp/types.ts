@@ -8,7 +8,8 @@ export type CapabilityFamily =
   | "system_status"
   | "confined_process"
   | "autostart"
-  | "filesystem";
+  | "filesystem"
+  | "connector";
 
 export interface ToolContext {
   signal?: AbortSignal;
