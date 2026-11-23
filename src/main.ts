@@ -52,7 +52,6 @@ const mcpServer = await createGanglionMcpServer(transport, {
   ...(scripts ? { scripts } : {}),
   ...(paired?.tiers ? { tiers: parseTiers(paired.tiers) } : {}),
   ...(paired?.connectors ? { connectors: parseConnectors(paired.connectors) } : {}),
-  // In the jail (bun run start:confined) apps open outside it, by name only, through the broker.
   ...(brokerFd !== undefined ? {
     launchApp: async (entry: { name: string }) => { writeSync(brokerFd, `${JSON.stringify({ name: entry.name })}\n`); },
     setVolume: async (command: string) => { writeSync(brokerFd, `${JSON.stringify({ volume: command })}\n`); },

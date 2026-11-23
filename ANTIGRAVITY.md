@@ -17,6 +17,8 @@
 9. **Reconnects Keep the Session:** only a close that will not be retried may call `onclose`, because the MCP SDK detaches for good on it. No local audit chain and no kill switch logic here: Brain does both (GANGLION_DECISIONS 31).
 10. **Scripts by Id Only:** `run_script`'s only argument is an id from the registered enum; program and arguments come from the human's `config.json`. Never add a field carrying a command, path or argument. `media_control` is Read tier from a fixed list (GANGLION_DECISIONS 32).
 11. **Screenshots Leave Nothing Behind:** capture through the Screenshot portal non-interactively, delete GNOME's saved copy at once, and shrink to a JPEG of at most 44 KB so it fits one message (GANGLION_DECISIONS 33).
+12. **Run Confined:** `bun run start:confined` jails the daemon (bubblewrap, filtered D-Bus, Landlock, seccomp). Never mount the real session bus, the PipeWire socket or the home directory into it; the broker outside accepts only a registered app name or a fixed volume command (GANGLION_DECISIONS 36).
+13. **One Tool at a Time:** tiers change per tool in `bun run settings`, never with a blanket key; connector tools start at Action. A desktop approval surface is opt-in and shows the exact arguments (GANGLION_DECISIONS 34, 35).
 
 ---
 

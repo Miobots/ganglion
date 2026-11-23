@@ -5,8 +5,44 @@ See `CLAUDE.md` for the rules that apply here.
 ```bash
 bun install
 bun run pair --folder ~/Documents/Mio   # once: shows a six-digit code to type into the app
-bun start
+bun run settings                        # optional: tool levels, folders, approvals on this laptop
+bun run start:confined                  # the daemon in its jail (Linux); `bun start` runs it unconfined
 ```
+
+## Running confined (Linux)
+
+`bun run start:confined` needs `bwrap` (bubblewrap), `xdg-dbus-proxy` and a C compiler; on Ubuntu,
+`sudo apt install bubblewrap xdg-dbus-proxy build-essential`. It compiles `sandbox/ganglion-sandbox.c`
+on first run. Inside, the daemon sees only system files, this code, its config, the approved folders,
+registered scripts and the screenshots folder; D-Bus reaches only the screenshot portal,
+notifications and media players; TCP reaches only the Brain's port and nothing may listen; 41
+dangerous system calls are refused. Apps and volume changes go through a broker outside, by name
+only. `bun test tests/confinement.test.ts` runs a hostile program in the same jail and checks each
+attempt to escape is refused (GANGLION_DECISIONS 36).
+
+## Settings, tiers, connectors, desktop approvals
+
+`bun run settings` opens GNOME dialogs to change one tool's level at a time ("ask on the phone" or
+"run without asking"), the approved folders, and whether approvals also appear on this laptop. It
+writes `config.json` only; restart the daemon to apply. The same keys can be written by hand:
+
+```json
+{
+  "tiers": { "media_control": "action" },
+  "desktopApprovals": true,
+  "connectors": [{ "name": "notes", "command": "/usr/local/bin/notes-mcp", "args": ["--read-only"] }]
+}
+```
+
+`tiers` keys must name one tool each; there is no blanket key. A connector is an MCP server over
+stdio; its tools appear as `notes.<tool>` and start at the Action tier until you lower one
+(GANGLION_DECISIONS 34, 35).
+
+## Platforms
+
+Built and tested on Linux (GNOME, Wayland). On macOS and Windows only system status, opening apps
+and URLs, scripts (unconfined) and the platform-independent tools have code, and none of it has been
+run there; media, screen capture and confinement are not built (GANGLION_DECISIONS 37).
 
 `bun run pair` connects to Brain (`--brain`, default `ws://127.0.0.1:8080/ws`), shows a code, and
 waits up to five minutes for someone to type it into the app (Devices → Pair a laptop). It then
@@ -25,8 +61,7 @@ Design documentation is in the Obsidian vault two levels up.
 The server core is independently testable through an injected transport. Only explicitly registered tools are
 advertised. Filesystem tools operate inside human-approved directories, use read/action permissions,
 refuse overwrites unless explicitly requested, and require approval for actions and deletion.
-Filesystem operation metadata is kept in memory for tests; Brain's durable audit chain is not
-implemented yet. Filesystem tools are disabled unless an allowed-directory
+Every call is recorded in Brain's hash-chained audit log before it runs (BRAIN_DECISIONS 29). Filesystem tools are disabled unless an allowed-directory
 policy is supplied.
 
 Set `GANGLION_FILESYSTEM_POLICY` to a JSON policy to enable them:

@@ -92,14 +92,25 @@ connection.
 registered ids; the program and arguments come from the human's `config.json`. Never add a field
 that carries a command, a path or extra arguments. `media_control` is Read tier, from a fixed list.
 
-**Not built yet:** the kernel confinement below (`G5.1`–`G5.3`; the daemon runs as the logged-in
-user) and a desktop approval surface (`G6.1`).
+**Run it confined: `bun run start:confined`** (GANGLION_DECISIONS 36). bubblewrap shows the daemon
+only system files, its code and config, the approved folders, registered scripts and the
+screenshots folder; `xdg-dbus-proxy` limits D-Bus to the screenshot portal, notifications and media
+players; `sandbox/ganglion-sandbox.c` adds Landlock (TCP connect to the Brain's port only, no
+listening, writes only where allowed) and seccomp. Registered apps and volume go through a broker
+outside, by name only. **Never mount the real session bus, the PipeWire socket or the home
+directory into the jail, and never let the broker accept anything but a registered app name or a
+fixed volume command.** `bun start` still runs unconfined, for development.
+
+**The human changes permissions in `bun run settings`** (GANGLION_DECISIONS 35): one tool at a
+time, never a blanket switch; connector tools start at Action. **The laptop can be an approval
+surface** when the human turns it on (GANGLION_DECISIONS 34): a notification with the exact
+arguments, the click is the ACK.
 
 ## Platform reality
 
-Linux is built properly, with kernel-level confinement — Landlock for filesystem scoping, seccomp
-for syscall filtering, a separate low-privilege user, and no network by default. macOS and Windows
-get the separate-user baseline until there is time.
+Linux is built and tested, confined as above (no separate OS user: it could not reach the desktop
+session the screen and media tools need). macOS and Windows are the untested subset in
+GANGLION_DECISIONS 37's table; say so rather than imply otherwise.
 
 OS operations sit behind platform adapters. Process management is currently Linux-only and explicitly
 opt-in. Its five tools list, inspect, find, start, and terminate processes. Discovery returns all
@@ -110,13 +121,13 @@ is not implemented. Process actions remain subject to the Ganglion OS user's per
 
 CPU sampling uses configured `clockTicksPerSecond` and a background interval; no universal tick rate
 is assumed. CPU percentage is per-core and may exceed 100%. Memory is reported in bytes, with RSS
-separate from virtual memory. The `confined_process` capability name does not provide kernel or OS
-confinement.
+separate from virtual memory. The `confined_process` name alone confines nothing; under
+`bun run start:confined`, scripts and started processes run inside the jail.
 
 **Screen capture on Wayland goes through `xdg-desktop-portal`, and GNOME asks once and remembers**
-(GANGLION_DECISIONS 33, verified within a session; a post-reboot check is owed). The capture is
-shrunk to a JPEG of at most 44 KB so it fits one protocol message, and GNOME's saved copy in
-`~/Pictures` is deleted at once. Never offer the agent the interactive picker.
+(GANGLION_DECISIONS 33, verified across a reboot). The capture is shrunk to a JPEG of at most 44 KB
+so it fits one protocol message, and GNOME's saved copy in `~/Pictures` is deleted at once. The
+agent may pick a fixed `area` to read small text; never offer it the interactive picker.
 
 ## Where the design lives
 
