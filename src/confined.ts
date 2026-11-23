@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, lstatSync, readlinkSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readlinkSync, rmSync, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -148,10 +148,12 @@ async function main(): Promise<void> {
   if (requests && "on" in requests) {
     createInterface({ input: requests as NodeJS.ReadableStream }).on("line", (line) => console.log(`[broker] ${brokerOpen(apps, line)}`));
   }
-  const stop = () => { jail.kill("SIGTERM"); bus?.proxy.kill(); };
+  // xdg-dbus-proxy leaves its socket file behind when killed.
+  const closeBus = () => { bus?.proxy.kill(); if (bus) rmSync(bus.socket, { force: true }); };
+  const stop = () => { jail.kill("SIGTERM"); closeBus(); };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  jail.on("exit", (code) => { bus?.proxy.kill(); process.exit(code ?? 1); });
+  jail.on("exit", (code) => { closeBus(); process.exit(code ?? 1); });
 }
 
 if (import.meta.main) await main();
